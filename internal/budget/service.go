@@ -46,23 +46,28 @@ type Storage interface {
 	SaveSession(session auth.Session) error
 	CheckSession(token string) (userId string, err error)
 	SaveTransaction(t Transaction) error
-	GetAllTransactions(userID string) ([]Transaction, error)
-	GetTransactionsByType(userID string, transactionType string) ([]Transaction, error)
-	GetTransactionsByCategory(userID string, category string) ([]Transaction, error)
+	GetFilteredTransactions(userID string, filters ListTransactionsFilters) ([]Transaction, error)
 	GetTransactionById(userID string, transacationID string) (Transaction, error)
-	GetTransactionsByCurrency(userID string, currencyType string) ([]Transaction, error)
-	GetTotalsByType(tType string, userID string) (string, error)
 	ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error)
-	FindUserByUserName(username string) (string, error)
+	IsUserExists(username string) (bool, error)
 	IsEmailConfirmed(emailAddress string) bool
 	UpdateTransaction(userID string, transacationItem UpdateTransactionItem) error
 	DeleteTransaction(userID string, transacationID string) error
+	LogoutUser(userId string, token string) error
 	GetStorageType() string
+}
+
+func (bt *BudgetTracker) ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error) {
+	user, err := bt.storage.ValidateUser(credentials)
+	if err != nil {
+		return auth.User{}, fmt.Errorf("failed to login: %w", err)
+	}
+	return user, nil
 }
 
 func (bt *BudgetTracker) GenerateSession(credentialsPure auth.UserCredentialsPure) (string, error) {
 	user, err := bt.storage.ValidateUser(credentialsPure)
-	if err != nil && user == (auth.User{}) {
+	if err != nil {
 		return "", fmt.Errorf("failed to login: %w", err)
 	}
 
@@ -70,7 +75,7 @@ func (bt *BudgetTracker) GenerateSession(credentialsPure auth.UserCredentialsPur
 	if _, err := io.ReadFull(rand.Reader, tokenByte); err != nil {
 		return "", fmt.Errorf("failed to generate new session: %w", err)
 	}
-	token := hex.EncodeToString(tokenByte)
+	token := hex.EncodeToString(tokenByte) //mapping
 
 	now := time.Now()
 	session := auth.Session{
@@ -84,22 +89,43 @@ func (bt *BudgetTracker) GenerateSession(credentialsPure auth.UserCredentialsPur
 	if err != nil {
 		return "", fmt.Errorf("failed to save session: %w", err)
 	}
-	return fmt.Sprintf("token:%s", token), nil
+	return token, nil
+}
+
+func (bt *BudgetTracker) CheckSession(token string) (string, error) {
+	userId, err := bt.storage.CheckSession(token)
+	if err != nil {
+		return "", err
+	}
+	return userId, nil
+}
+
+func (bt *BudgetTracker) IsUserExists(username string) (bool, error) {
+	result, err := bt.storage.IsUserExists(username)
+	if err != nil {
+		return false, fmt.Errorf("failed to check user existance: %w", err)
+	}
+	return result, nil
 }
 
 func (bt *BudgetTracker) SaveUser(newUser auth.NewUser) error {
-	takenUserName, err := bt.storage.FindUserByUserName(newUser.UserName)
-	if err != nil && takenUserName != "" {
-		return fmt.Errorf("%w: this: '%s' username already taken", errConflict, newUser.UserName)
+	isExists, err := bt.IsUserExists(newUser.UserName)
+	if err != nil {
+		return fmt.Errorf("failed to check username availability: %w", err)
+	}
+	if isExists {
+		return fmt.Errorf("%w: this '%s' username already taken", errConflict, newUser.UserName)
 	}
 	if existingEmailAddress := bt.storage.IsEmailConfirmed(newUser.Email); existingEmailAddress != false {
 		return fmt.Errorf("%w: this: '%s' email address already taken and confirmed, try to register with another email.", errConflict, newUser.Email)
 	}
 
+	fmt.Printf("saveUser/plan password: %s\n", newUser.PasswordPlain)
 	hashedPassword, err := auth.HashPassword(newUser.PasswordPlain)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
+	fmt.Printf("hash from business layer %s\n", hashedPassword)
 
 	user := auth.User{
 		ID:             uuid.New().String(),
@@ -117,12 +143,7 @@ func (bt *BudgetTracker) SaveUser(newUser auth.NewUser) error {
 	return nil
 }
 
-func (bt *BudgetTracker) SaveTransaction(token string, amount float64, category string, transcationType string, currency string) error {
-	userId, err := bt.storage.CheckSession(token)
-	if err != nil {
-		return fmt.Errorf("%s:  failed to save transaction: %w", errAuth, err)
-	}
-
+func (bt *BudgetTracker) SaveTransaction(createdBy string, amount float64, category string, transcationType string, currency string) error {
 	if amount < 0 {
 		return fmt.Errorf("%w: amount must be positive", errInvalidInput)
 	}
@@ -143,7 +164,6 @@ func (bt *BudgetTracker) SaveTransaction(token string, amount float64, category 
 	}
 
 	now := time.Now()
-
 	t := Transaction{
 		ID:          uuid.New().String(),
 		Amount:      amount,
@@ -152,7 +172,7 @@ func (bt *BudgetTracker) SaveTransaction(token string, amount float64, category 
 		UpdatedDate: now,
 		CreatedDate: now,
 		Type:        transcationType,
-		CreatedBy:   userId,
+		CreatedBy:   createdBy,
 	}
 
 	if err := bt.storage.SaveTransaction(t); err != nil {
@@ -161,44 +181,12 @@ func (bt *BudgetTracker) SaveTransaction(token string, amount float64, category 
 	return nil
 }
 
-func (bt *BudgetTracker) GetAllTransactions(token string) ([]Transaction, error) {
-	userId, err := bt.storage.CheckSession(token)
-	if err != nil {
-		return nil, fmt.Errorf("%w:  failed to get transaction: %w", errAuth, err)
-	}
-
-	ts, err := bt.storage.GetAllTransactions(userId)
+func (bt *BudgetTracker) GetFilteredTransactions(userId string, filters ListTransactionsFilters) ([]Transaction, error) {
+	ts, err := bt.storage.GetFilteredTransactions(userId, filters)
 	if err != nil {
 		return nil, fmt.Errorf("%w: failed to get transactions: %w", errAuth, err)
 	}
 	return ts, nil
-}
-
-func (bt *BudgetTracker) GetTransactionsByType(token string, transactionType string) ([]Transaction, error) {
-	userId, err := bt.storage.CheckSession(token)
-	if err != nil {
-		return nil, fmt.Errorf("%w:  failed to get transactions by type: %w", errAuth, err)
-	}
-
-	results, err := bt.storage.GetTransactionsByType(userId, transactionType)
-	if err != nil {
-		return []Transaction{}, fmt.Errorf("failed to get transactions by type: %w", err)
-	}
-	return results, nil
-}
-
-func (bt *BudgetTracker) GetTransactionsByCategory(token string, category string) ([]Transaction, error) {
-	userId, err := bt.storage.CheckSession(token)
-	if err != nil {
-		return nil, fmt.Errorf("%w:  failed to get transactions by type: %w", errAuth, err)
-	}
-
-	ts, err := bt.storage.GetTransactionsByCategory(userId, strings.ToLower(category))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get transactions by category: %w", err)
-	}
-	return ts, nil
-
 }
 
 func (bt *BudgetTracker) GetTranscationById(token string, transactionId string) (Transaction, error) {
@@ -211,18 +199,6 @@ func (bt *BudgetTracker) GetTranscationById(token string, transactionId string) 
 		return Transaction{}, fmt.Errorf("failed to get transaction by id: %w", err)
 	}
 	return t, nil
-}
-
-func (bt *BudgetTracker) GetTotalsByType(tType string, token string) (string, error) {
-	userId, err := bt.storage.CheckSession(token)
-	if err != nil {
-		return "", fmt.Errorf("%w:  failed to get transactions by type: %w", errAuth, err)
-	}
-	results, err := bt.storage.GetTotalsByType(tType, userId)
-	if err != nil {
-		return "", fmt.Errorf("failed to get transactions by type: %w", err)
-	}
-	return results, nil
 }
 
 func (bt *BudgetTracker) UpdateTransaction(token string, updateTItem UpdateTransactionItem) error {
@@ -275,6 +251,14 @@ func (bt *BudgetTracker) DeleteTransaction(token string, transactionId string) e
 	}
 	if err := bt.storage.DeleteTransaction(userId, transactionId); err != nil {
 		return fmt.Errorf("failed to delete transaction, Transaction-ID: %s, error: %w", transactionId, err)
+	}
+	return nil
+}
+
+func (bt *BudgetTracker) LogoutUser(userId string, token string) error {
+	err := bt.storage.LogoutUser(userId, token)
+	if err != nil {
+		return err
 	}
 	return nil
 }

@@ -23,3 +23,11 @@ type UpdateTransactionItem struct {
 	UpdatedDate time.Time
 	Type        string
 }
+
+type ListTransactionsFilters struct {
+	Categories []string //fun,food,tickets etc.
+	Type       *string  //+
+	MinAmount  *float64 //5 Range
+	MaxAmount  *float64 //500
+	IsAllNil   bool
+}

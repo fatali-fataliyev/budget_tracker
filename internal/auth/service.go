@@ -12,8 +12,8 @@ func HashPassword(password string) (string, error) {
 		return "", fmt.Errorf("failed to hash plain password to hashed password: %w", err)
 	}
 	return string(hashedPassword), nil
-
 }
+
 func ComparePasswords(hashedPwd string, plainPwd string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPwd), []byte(plainPwd))
 	return err == nil
