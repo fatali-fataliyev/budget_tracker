@@ -94,7 +94,7 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 	params := r.URL.Query()
 
 	filters := &budget.ListTransactionsFilters{}
-	filterFields, err := filters.ValidateParams(params)
+	filterFields, err := filters.ListValidateParams(params)
 	if err != nil {
 		msg := fmt.Sprintf("something went wrong: %s", err.Error())
 		return iz.Respond().Status(400).Text(msg)
@@ -115,13 +115,40 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(200).JSON(tsForHttp)
 }
 
-func (api *Api) GetTotalsByTypeHandler(w http.ResponseWriter, r *http.Request) {
+func (api *Api) GetTotalsByTypeAndCurrencyHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
-		http.Error(w, "Authorization header is required", http.StatusUnauthorized)
-		return
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
 	}
 
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	params := r.URL.Query()
+
+	filters := &budget.GetTotals{}
+	filterFields, err := filters.GetTotalValidate(params)
+	if err != nil {
+		msg := fmt.Sprintf("something went wrong: %s", err.Error())
+		return iz.Respond().Status(400).Text(msg)
+	}
+
+	result, err := api.Service.GetTotalsByTypeAndCurrency(userId, *filterFields)
+	if err != nil {
+		msg := fmt.Sprintf("failed to get totals by type and currency: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	resultForHttp := GetTotalsResponse{
+		Currency: result.Currency,
+		Type:     result.Type,
+		Total:    result.Total,
+	}
+	return iz.Respond().Status(200).JSON(resultForHttp)
 }
 
 func (api *Api) GetTransactionByIdHandler(w http.ResponseWriter, r *http.Request) {

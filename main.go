@@ -63,8 +63,8 @@ func main() {
 	server.HandleFunc("POST /logout", iz.Bind(api.LogoutUserHandler))
 	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))
 	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler))
+	server.HandleFunc("GET /total", iz.Bind(api.GetTotalsByTypeAndCurrencyHandler))
 	server.HandleFunc("GET /transaction/{id}", api.GetTransactionByIdHandler)
-	server.HandleFunc("GET /transaction/total/", api.GetTotalsByTypeHandler)
 	server.HandleFunc("PUT /transaction/{id}", api.UpdateTransactionHandler)
 	server.HandleFunc("DELETE /transaction/{id}", api.DeleteTransactionHandler)
 
