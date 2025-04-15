@@ -132,8 +132,8 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters budget
 		args = append(args, categories...)
 	}
 
-	fmt.Println("args: ", args)
-	fmt.Println("kueri: ", query)
+	fmt.Println("args from DB layer: ", args)
+	fmt.Println("query from DB layer: ", query)
 
 	rows, err := mySql.db.Query(query, args...)
 	if err != nil {
@@ -170,7 +170,6 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters budget
 		transactions = append(transactions, budgetT)
 	}
 	return transactions, nil
-
 }
 
 func (mySql *MySQLStorage) GetTotalsByType(tType string, userID string) (string, error) {

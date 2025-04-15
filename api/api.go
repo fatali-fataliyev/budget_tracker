@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -92,93 +91,16 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 		return iz.Respond().Status(401).Text(msg)
 	}
 
-	// TODO extract a function to parse ListTransactionsFilters
 	params := r.URL.Query()
 
-	filterFields := budget.ListTransactionsFilters{}
-
-	if len(params) == 0 {
-		filterFields.IsAllNil = true
-		ts, err := api.Service.GetFilteredTransactions(userId, filterFields)
-		if err != nil {
-			msg := fmt.Sprintf("failed to get transactions: %s", err.Error())
-			return iz.Respond().Status(400).Text(msg)
-		}
-
-		tsForHttp := make([]TransactionItem, 0, len(ts))
-
-		for _, t := range ts {
-			tForHttpItem := TransactionToHttp(t)
-			tsForHttp = append(tsForHttp, tForHttpItem)
-		}
-
-		return iz.Respond().Status(200).JSON(tsForHttp)
+	filters := &budget.ListTransactionsFilters{}
+	filterFields, err := filters.ValidateParams(params)
+	if err != nil {
+		msg := fmt.Sprintf("something went wrong: %s", err.Error())
+		return iz.Respond().Status(400).Text(msg)
 	}
 
-	var categoriesWithEmptyStrings []string
-	var categories []string
-	categoryRaw := params.Get("categories")
-
-	categoriesWithEmptyStrings = strings.Split(categoryRaw, ",")
-
-	for _, category := range categoriesWithEmptyStrings {
-		trimmed := strings.TrimSpace(category)
-		if trimmed != "" {
-			categories = append(categories, trimmed)
-		}
-	}
-
-	transactionType := params.Get("type")
-	minAmount := params.Get("min")
-	maxAmount := params.Get("max")
-
-	var maxAmountFloat *float64
-	var minAmountFloat *float64
-
-	if minAmount != "" {
-		parsedMinAmount, err := strconv.ParseFloat(minAmount, 64)
-		if err == nil {
-			minAmountFloat = &parsedMinAmount
-		}
-		if err != nil {
-			msg := fmt.Sprintf("invalid minimum amount %s", err.Error())
-			return iz.Respond().Status(400).Text(msg)
-		}
-	} else {
-		minAmountFloat = nil
-	}
-	if maxAmount != "" {
-		parsedMaxAmount, err := strconv.ParseFloat(maxAmount, 64)
-		if err == nil {
-			maxAmountFloat = &parsedMaxAmount
-		}
-		if err != nil {
-			msg := fmt.Sprintf("invalid maximum amount %s", err.Error())
-			return iz.Respond().Status(400).Text(msg)
-		}
-	} else {
-		minAmountFloat = nil
-	}
-	if transactionType != "" {
-		if transactionType == "income" {
-			income := "+"
-			filterFields.Type = &income
-			fmt.Println(*filterFields.Type)
-		} else if transactionType == "expense" {
-			expense := "-"
-			filterFields.Type = &expense
-			fmt.Println(*filterFields.Type)
-		} else {
-			msg := fmt.Sprintf("invalid transaction type")
-			return iz.Respond().Status(400).Text(msg)
-		}
-	}
-
-	filterFields.MinAmount = minAmountFloat
-	filterFields.MaxAmount = maxAmountFloat
-	filterFields.Categories = categories
-
-	ts, err := api.Service.GetFilteredTransactions(userId, filterFields)
+	ts, err := api.Service.GetFilteredTransactions(userId, *filterFields)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get transactions: %s", err.Error())
 		return iz.Respond().Status(400).Text(msg)
