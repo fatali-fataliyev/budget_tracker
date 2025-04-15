@@ -172,17 +172,32 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters budget
 	return transactions, nil
 }
 
-func (mySql *MySQLStorage) GetTotalsByType(tType string, userID string) (string, error) {
-	query := "SELECT SUM(amount) FROM transactions WHERE created_by = ? AND type = ?;"
-	row := mySql.db.QueryRow(query, userID, tType)
+func (mySql *MySQLStorage) GetTotalsByTypeAndCurrency(userID string, filters budget.GetTotals) (budget.GetTotals, error) {
+	var query string
+	args := []interface{}{
+		userID,
+	}
+	total := budget.GetTotals{}
 
-	var total string
-	err := row.Scan(&total)
+	query = `SELECT SUM(amount), type, currency 
+		FROM transactions 
+		WHERE created_by = ? AND type = ? AND currency = ?
+		GROUP BY type, currency;`
+	args = append(args, filters.Type, filters.Currency)
+
+	rows, err := mySql.db.Query(query, args...)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("no transactions found")
+		return budget.GetTotals{}, fmt.Errorf("failed to get totals by type: %w", err)
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		err = rows.Scan(&total.Total, &total.Type, &total.Currency)
+		if err != nil {
+			return budget.GetTotals{}, fmt.Errorf("failed to scan transaction get by total: %w", err)
 		}
-		return "", fmt.Errorf("failed to scan total: %w", err)
+	} else {
+		return budget.GetTotals{}, fmt.Errorf("no results found")
 	}
 	return total, nil
 }
