@@ -198,11 +198,7 @@ func (bt *BudgetTracker) GetTotalsByTypeAndCurrency(userId string, filters GetTo
 	return result, nil
 }
 
-func (bt *BudgetTracker) GetTranscationById(token string, transactionId string) (Transaction, error) {
-	userId, err := bt.storage.CheckSession(token)
-	if err != nil {
-		return Transaction{}, fmt.Errorf("%w:  failed to get transaction by id: %w", errAuth, err)
-	}
+func (bt *BudgetTracker) GetTranscationById(userId string, transactionId string) (Transaction, error) {
 	t, err := bt.storage.GetTransactionById(userId, transactionId)
 	if err != nil {
 		return Transaction{}, fmt.Errorf("failed to get transaction by id: %w", err)
@@ -210,11 +206,7 @@ func (bt *BudgetTracker) GetTranscationById(token string, transactionId string) 
 	return t, nil
 }
 
-func (bt *BudgetTracker) UpdateTransaction(token string, updateTItem UpdateTransactionItem) error {
-	userId, err := bt.storage.CheckSession(token)
-	if err != nil {
-		return fmt.Errorf("%w:  failed to update transaction: %w", errAuth, err)
-	}
+func (bt *BudgetTracker) UpdateTransaction(userId string, updateTItem UpdateTransactionItem) error {
 	if updateTItem.Amount < 0 {
 		return fmt.Errorf("%w: amount must be positive", errInvalidInput)
 	}
@@ -246,11 +238,7 @@ func (bt *BudgetTracker) UpdateTransaction(token string, updateTItem UpdateTrans
 	return nil
 }
 
-func (bt *BudgetTracker) DeleteTransaction(token string, transactionId string) error {
-	userId, err := bt.storage.CheckSession(token)
-	if err != nil {
-		return fmt.Errorf("%w:  failed to delete transaction: %w", errAuth, err)
-	}
+func (bt *BudgetTracker) DeleteTransaction(userId string, transactionId string) error {
 	tItem, err := bt.storage.GetTransactionById(userId, transactionId)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction's creator: %w", err)
