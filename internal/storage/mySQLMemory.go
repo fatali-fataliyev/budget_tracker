@@ -37,6 +37,68 @@ func (mySql *MySQLStorage) SaveSession(session auth.Session) error {
 	return nil
 }
 
+func (mySql *MySQLStorage) ExtendDateOfSession(userId string) error {
+	query := `SELECT expire_at FROM sessions WHERE user_id = ?`
+
+	var expireAtString string
+
+	err := mySql.db.QueryRow(query, userId).Scan(&expireAtString)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("session not found, login.")
+		}
+		return fmt.Errorf("failed to check session: %w", err)
+	}
+
+	expireAt, err := time.Parse("2006-01-02 15:04:05", expireAtString)
+	if err != nil {
+		return fmt.Errorf("failed to parse expire_at: %w", err)
+	}
+	nowRaw := time.Now().Format("2006-01-02 15:04:05")
+	now, err := time.Parse("2006-01-02 15:04:05", nowRaw)
+	if err != nil {
+		return fmt.Errorf("failed to parse now: %w", err)
+	}
+
+	daysUntilExpiry := int(expireAt.Sub(now).Hours() / 24) // 5 day required (uzatma)
+
+	if daysUntilExpiry <= 5 {
+		newExpireAt := time.Now().AddDate(0, 1, 0)
+		query := "UPDATE sessions SET expire_at = ? WHERE user_id = ?;"
+
+		result, err := mySql.db.Exec(query, newExpireAt, userId)
+		if err != nil {
+			return fmt.Errorf("failed to extend session expiration date: %w", err)
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to check: extend or not %w", err)
+		}
+
+		if rowsAffected > 0 {
+			return nil
+		} else {
+			return fmt.Errorf("failed to extend session expiration date")
+		}
+	}
+	return fmt.Errorf("session still valid")
+}
+
+func (mySql *MySQLStorage) GetUserIdByToken(token string) (string, error) {
+	query := `SELECT user_id FROM sessions WHERE token = ?`
+
+	var userId string
+	err := mySql.db.QueryRow(query, token).Scan(&userId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("user id not found.")
+		}
+		return "", fmt.Errorf("failed to get user id by token: %w", err)
+	}
+	return userId, nil
+}
+
 func (mySql *MySQLStorage) CheckSession(token string) (string, error) {
 	query := `SELECT user_id, expire_at FROM sessions WHERE token = ?`
 
@@ -50,14 +112,21 @@ func (mySql *MySQLStorage) CheckSession(token string) (string, error) {
 		}
 		return "", fmt.Errorf("failed to query session: %w", err)
 	}
+
 	expireAt, err := time.Parse("2006-01-02 15:04:05", expireAtString)
+	nowRaw := time.Now().Format("2006-01-02 15:04:05")
+	now, err := time.Parse("2006-01-02 15:04:05", nowRaw)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse expire_at")
-	}
-	if expireAt.Before(time.Now()) {
-		return "", fmt.Errorf("session expired, please login again")
+		return "", fmt.Errorf("failed to parse expire_at: %w", err)
 	}
 
+	fmt.Println("expireAt:", expireAt)
+	fmt.Println("now     :", now)
+	fmt.Println("expired?:", expireAt.Before(now))
+
+	if expireAt.Before(now) {
+		return "", fmt.Errorf("session expired, please login again")
+	}
 	return userID, nil
 }
 
@@ -70,17 +139,21 @@ func (mySql *MySQLStorage) SaveTransaction(t budget.Transaction) error {
 	return nil
 }
 
-func SafeValueConverter[T any](val *T) interface{} {
-	//from tutorialspoint.com
-
-	// T istenilen tipde ola biler, ve onun deyeri nildirse nil qaytarir, yox nil deyilse, pointerdeki value-nu qaytarir.
-	if val == nil {
-		return nil
+func NilToNullFloat64(v *float64) sql.NullFloat64 {
+	if v == nil {
+		return sql.NullFloat64{Valid: false}
 	}
-	return *val
+	return sql.NullFloat64{Valid: true, Float64: *v}
 }
 
-func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters budget.ListTransactionsFilters) ([]budget.Transaction, error) {
+func NilToNullString(v *string) sql.NullString {
+	if v == nil {
+		return sql.NullString{Valid: false}
+	}
+	return sql.NullString{Valid: true, String: *v}
+}
+
+func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budget.ListTransactionsFilters) ([]budget.Transaction, error) {
 	var query string
 	args := []interface{}{
 		userID,
@@ -101,12 +174,12 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters budget
           AND (? IS NULL OR type = ?)`
 
 		args = append(args,
-			SafeValueConverter(filters.MinAmount),
-			SafeValueConverter(filters.MinAmount),
-			SafeValueConverter(filters.MaxAmount),
-			SafeValueConverter(filters.MaxAmount),
-			SafeValueConverter(filters.Type),
-			SafeValueConverter(filters.Type),
+			NilToNullFloat64(filters.MinAmount),
+			NilToNullFloat64(filters.MinAmount),
+			NilToNullFloat64(filters.MaxAmount),
+			NilToNullFloat64(filters.MaxAmount),
+			NilToNullString(filters.Type),
+			NilToNullString(filters.Type),
 		)
 	} else {
 		categories := make([]interface{}, len(filters.Categories))
@@ -122,12 +195,12 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters budget
           AND category IN (?` + strings.Repeat(",?", len(categories)-1) + `)`
 
 		args = append(args,
-			SafeValueConverter(filters.MinAmount),
-			SafeValueConverter(filters.MinAmount),
-			SafeValueConverter(filters.MaxAmount),
-			SafeValueConverter(filters.MaxAmount),
-			SafeValueConverter(filters.Type),
-			SafeValueConverter(filters.Type),
+			NilToNullFloat64(filters.MinAmount),
+			NilToNullFloat64(filters.MinAmount),
+			NilToNullFloat64(filters.MaxAmount),
+			NilToNullFloat64(filters.MaxAmount),
+			NilToNullString(filters.Type),
+			NilToNullString(filters.Type),
 		)
 		args = append(args, categories...)
 	}
@@ -209,6 +282,9 @@ func (mySql *MySQLStorage) GetTransactionById(userID string, transactionId strin
 	var t dbTransaction
 	err := row.Scan(&t.ID, &t.Amount, &t.Currency, &t.Category, &t.CreatedDate, &t.UpdatedDate, &t.Type, &t.CreatedBy)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return budget.Transaction{}, fmt.Errorf("%w: transaction not found", budget.ErrNotFound)
+		}
 		return budget.Transaction{}, fmt.Errorf("failed to scan transaction: %w", err)
 	}
 
