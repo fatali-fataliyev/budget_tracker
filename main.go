@@ -65,6 +65,7 @@ func main() {
 	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler))
 	server.HandleFunc("GET /total", iz.Bind(api.GetTotalsByTypeAndCurrencyHandler))
 	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler))
+	// GET -> transaction/id
 	server.HandleFunc("PUT /transaction/{id}", iz.Bind(api.UpdateTransactionHandler))
 	server.HandleFunc("DELETE /transaction/{id}", iz.Bind(api.DeleteTransactionHandler))
 

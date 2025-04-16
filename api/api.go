@@ -93,14 +93,13 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 
 	params := r.URL.Query()
 
-	filters := &budget.ListTransactionsFilters{}
-	filterFields, err := filters.ListValidateParams(params)
+	filters, err := ListValidateParams(params)
 	if err != nil {
 		msg := fmt.Sprintf("something went wrong: %s", err.Error())
 		return iz.Respond().Status(400).Text(msg)
 	}
 
-	ts, err := api.Service.GetFilteredTransactions(userId, *filterFields)
+	ts, err := api.Service.GetFilteredTransactions(userId, filters)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get transactions: %s", err.Error())
 		return iz.Respond().Status(400).Text(msg)
@@ -115,6 +114,7 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(200).JSON(tsForHttp)
 }
 
+// TODO: rename to GetTotals because is dosen't scale for new fields(+Name,+Surname)
 func (api *Api) GetTotalsByTypeAndCurrencyHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -140,7 +140,7 @@ func (api *Api) GetTotalsByTypeAndCurrencyHandler(r *iz.Request) iz.Responder {
 	result, err := api.Service.GetTotalsByTypeAndCurrency(userId, *filterFields)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get totals by type and currency: %s", err.Error())
-		return iz.Respond().Status(401).Text(msg)
+		return iz.Respond().Status(500).Text(msg)
 	}
 
 	resultForHttp := GetTotalsResponse{
@@ -151,6 +151,7 @@ func (api *Api) GetTotalsByTypeAndCurrencyHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(200).JSON(resultForHttp)
 }
 
+// TODO return 404 if not found
 func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -164,18 +165,12 @@ func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 		return iz.Respond().Status(401).Text(msg)
 	}
 
-	path := r.URL.Path
-	parts := strings.Split(path, "/")
-	if len(parts) < 3 || parts[2] == "" {
-		msg := fmt.Sprintf("Missing transaction ID:")
-		return iz.Respond().Status(401).Text(msg)
-	}
-	tId := parts[2]
+	tId := r.PathValue("id")
 
 	t, err := api.Service.GetTranscationById(userId, tId)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get transaction by ID: %s", err.Error())
-		return iz.Respond().Status(500).Text(msg)
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 	tForHttp := TransactionToHttp(t)
 	return iz.Respond().Status(200).JSON(tForHttp)
