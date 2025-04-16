@@ -85,10 +85,17 @@ type GetTotalsResponse struct {
 func httpStatusFromError(err error) int {
 	switch {
 	case errors.Is(err, budget.ErrNotFound):
-		return 404
-		// todo add other cases
+		return 404 // not found
+	case errors.Is(err, budget.ErrInvalidInput):
+		return 400 // bad request
+	case errors.Is(err, budget.ErrAuth):
+		return 401 // unauthorized
+	case errors.Is(err, budget.ErrAccessDenied):
+		return 403 // access denied
+	case errors.Is(err, budget.ErrConflict):
+		return 409 // conflict
 	default:
-		return 500
+		return 500 //internal error
 	}
 }
 

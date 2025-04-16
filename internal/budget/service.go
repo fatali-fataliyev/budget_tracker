@@ -74,18 +74,18 @@ func (bt *BudgetTracker) GenerateSession(credentialsPure auth.UserCredentialsPur
 		return "", fmt.Errorf("failed to login: %w", err)
 	}
 
-	tokenByte := make([]byte, 32)
+	tokenByte := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, tokenByte); err != nil {
 		return "", fmt.Errorf("failed to generate new session: %w", err)
 	}
-	token := hex.EncodeToString(tokenByte) //mapping
+	token := hex.EncodeToString(tokenByte)
 
 	now := time.Now()
 	session := auth.Session{
 		ID:        uuid.New().String(),
 		Token:     token,
 		CreatedAt: now,
-		ExpireAt:  now.AddDate(0, 9, 0),
+		ExpireAt:  now.AddDate(0, 3, 0),
 		UserID:    user.ID,
 	}
 	err = bt.storage.SaveSession(session)
@@ -131,22 +131,18 @@ func (bt *BudgetTracker) SaveUser(newUser auth.NewUser) error {
 	if existingEmailAddress := bt.storage.IsEmailConfirmed(newUser.Email); existingEmailAddress != false {
 		return fmt.Errorf("%w: this: '%s' email address already taken and confirmed, try to register with another email.", ErrConflict, newUser.Email)
 	}
-
-	fmt.Printf("saveUser/plan password: %s\n", newUser.PasswordPlain)
 	hashedPassword, err := auth.HashPassword(newUser.PasswordPlain)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
-	fmt.Printf("hash from business layer %s\n", hashedPassword)
-
 	user := auth.User{
 		ID:             uuid.New().String(),
-		UserName:       newUser.UserName,
-		FullName:       newUser.FullName,
+		UserName:       strings.ToLower(newUser.UserName),
+		FullName:       strings.ToUpper(newUser.FullName),
 		NickName:       newUser.NickName,
-		Email:          newUser.Email,
+		Email:          strings.ToLower(newUser.Email),
 		PasswordHashed: hashedPassword,
-		PendingEmail:   newUser.Email,
+		PendingEmail:   strings.ToLower(newUser.Email),
 	}
 
 	if err := bt.storage.SaveUser(user); err != nil {
@@ -163,7 +159,7 @@ func (bt *BudgetTracker) SaveTransaction(createdBy string, amount float64, categ
 		return fmt.Errorf("%w: zero value amount", ErrInvalidInput)
 	}
 	if amount > limitPerTransaction {
-		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%f", ErrInvalidInput, limitPerTransaction, amount)
+		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%2.f", ErrInvalidInput, limitPerTransaction, amount)
 	}
 	if strings.TrimSpace(transcationType) != "+" && strings.TrimSpace(transcationType) != "-" {
 		return fmt.Errorf("%w: allowed transaction types are: income(+) and expense(-)", ErrInvalidInput)
@@ -196,7 +192,7 @@ func (bt *BudgetTracker) SaveTransaction(createdBy string, amount float64, categ
 func (bt *BudgetTracker) GetFilteredTransactions(userId string, filters *ListTransactionsFilters) ([]Transaction, error) {
 	ts, err := bt.storage.GetFilteredTransactions(userId, filters)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to get transactions: %w", ErrAuth, err)
+		return nil, fmt.Errorf("failed to get transactions: %w", err)
 	}
 	return ts, nil
 }
@@ -225,7 +221,7 @@ func (bt *BudgetTracker) UpdateTransaction(userId string, updateTItem UpdateTran
 		return fmt.Errorf("%w: zero value amount", ErrInvalidInput)
 	}
 	if updateTItem.Amount > limitPerTransaction {
-		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%f", ErrInvalidInput, limitPerTransaction, updateTItem.Amount)
+		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%2.f", ErrInvalidInput, limitPerTransaction, updateTItem.Amount)
 	}
 	if updateTItem.Type != "+" && updateTItem.Type != "-" {
 		return fmt.Errorf("%w: allowed transaction types are: income(+) and expense(-)", ErrInvalidInput)
@@ -241,7 +237,7 @@ func (bt *BudgetTracker) UpdateTransaction(userId string, updateTItem UpdateTran
 		return fmt.Errorf("failed to get transaction's creator: %w", err)
 	}
 	if userId != tItem.CreatedBy {
-		return fmt.Errorf("%w: you cannot update other's transaction.", ErrAccessDenied)
+		return fmt.Errorf("%w: you are not allowed to update a transaction you did not create", ErrAccessDenied)
 	}
 	if err := bt.storage.UpdateTransaction(userId, updateTItem); err != nil {
 		return fmt.Errorf("failed to update transaction, Transaction-ID: %s, error: %w", updateTItem.ID, err)
@@ -255,7 +251,7 @@ func (bt *BudgetTracker) DeleteTransaction(userId string, transactionId string) 
 		return fmt.Errorf("failed to get transaction's creator: %w", err)
 	}
 	if userId != tItem.CreatedBy {
-		return fmt.Errorf("%w: you cannot delete other's transaction.", ErrAccessDenied)
+		return fmt.Errorf("%w: you are not allowed to delete a transaction you did not create", ErrAccessDenied)
 	}
 	if err := bt.storage.DeleteTransaction(userId, transactionId); err != nil {
 		return fmt.Errorf("failed to delete transaction, Transaction-ID: %s, error: %w", transactionId, err)
