@@ -64,9 +64,9 @@ func main() {
 	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))
 	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler))
 	server.HandleFunc("GET /total", iz.Bind(api.GetTotalsByTypeAndCurrencyHandler))
-	server.HandleFunc("GET /transaction/{id}", api.GetTransactionByIdHandler)
-	server.HandleFunc("PUT /transaction/{id}", api.UpdateTransactionHandler)
-	server.HandleFunc("DELETE /transaction/{id}", api.DeleteTransactionHandler)
+	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler))
+	server.HandleFunc("PUT /transaction/{id}", iz.Bind(api.UpdateTransactionHandler))
+	server.HandleFunc("DELETE /transaction/{id}", iz.Bind(api.DeleteTransactionHandler))
 
 	port := "8080"
 	fmt.Println("Listen: http://localhost:" + port)

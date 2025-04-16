@@ -151,37 +151,34 @@ func (api *Api) GetTotalsByTypeAndCurrencyHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(200).JSON(resultForHttp)
 }
 
-func (api *Api) GetTransactionByIdHandler(w http.ResponseWriter, r *http.Request) {
+func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
-		http.Error(w, "Authorization header is required", http.StatusUnauthorized)
-		return
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
 	}
 
 	path := r.URL.Path
 	parts := strings.Split(path, "/")
 	if len(parts) < 3 || parts[2] == "" {
-		http.Error(w, "Missing transaction ID", http.StatusBadRequest)
-		return
+		msg := fmt.Sprintf("Missing transaction ID:")
+		return iz.Respond().Status(401).Text(msg)
 	}
-	id := parts[2]
+	tId := parts[2]
 
-	t, err := api.Service.GetTranscationById(token, id)
+	t, err := api.Service.GetTranscationById(userId, tId)
 	if err != nil {
-		http.Error(w, "Transaction not found"+err.Error(), http.StatusNotFound)
-		return
+		msg := fmt.Sprintf("failed to get transaction by ID: %s", err.Error())
+		return iz.Respond().Status(500).Text(msg)
 	}
-
 	tForHttp := TransactionToHttp(t)
-
-	data, err := json.Marshal(tForHttp)
-	if err != nil {
-		http.Error(w, "Failed to marshal transaction", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	return iz.Respond().Status(200).JSON(tForHttp)
 }
 
 func (api *Api) ValidateUser(w http.ResponseWriter, r *http.Request) {
@@ -213,23 +210,29 @@ func (api *Api) ValidateUser(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("login successfully"))
 }
 
-func (api *Api) UpdateTransactionHandler(w http.ResponseWriter, r *http.Request) {
+func (api *Api) UpdateTransactionHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
-		http.Error(w, "Authorization header is required", http.StatusUnauthorized)
-		return
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
 	}
 
 	var updateReq UpdateTransactionRequest
 	if err := json.NewDecoder(r.Body).Decode(&updateReq); err != nil {
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
-		return
+		msg := fmt.Sprintf("Invalid request payload %s", err.Error())
+		return iz.Respond().Status(400).Text(msg)
 	}
 
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 3 || parts[2] == "" {
-		http.Error(w, "Missing transaction ID", http.StatusBadRequest)
-		return
+		msg := fmt.Sprintf("Missing transaction ID")
+		return iz.Respond().Status(401).Text(msg)
 	}
 	tId := parts[2]
 
@@ -243,36 +246,41 @@ func (api *Api) UpdateTransactionHandler(w http.ResponseWriter, r *http.Request)
 	}
 	defer r.Body.Close()
 
-	if err := api.Service.UpdateTransaction(token, updatedReq); err != nil {
-		http.Error(w, fmt.Sprintf("failed to update transaction: %v", err), http.StatusInternalServerError)
-		return
+	if err := api.Service.UpdateTransaction(userId, updatedReq); err != nil {
+		msg := fmt.Sprintf("failed to update transaction: %v", err)
+		return iz.Respond().Status(400).Text(msg)
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[+]transaction updated"))
+	msg := fmt.Sprintf("transaction updated successfully")
+	return iz.Respond().Status(200).Text(msg)
 }
 
-func (api *Api) DeleteTransactionHandler(w http.ResponseWriter, r *http.Request) {
+func (api *Api) DeleteTransactionHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
-		http.Error(w, "Authorization header is required", http.StatusUnauthorized)
-		return
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
 	}
 
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 3 || parts[2] == "" {
-		http.Error(w, "Missing transaction ID", http.StatusBadRequest)
-		return
+		msg := fmt.Sprintf("Missing transaction ID")
+		return iz.Respond().Status(401).Text(msg)
 	}
 	tId := parts[2]
 
-	if err := api.Service.DeleteTransaction(token, tId); err != nil {
-		http.Error(w, fmt.Sprintf("failed to delete transaction: %v", err), http.StatusInternalServerError)
-		return
+	if err := api.Service.DeleteTransaction(userId, tId); err != nil {
+		msg := fmt.Sprintf("failed to delete transaction: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
 	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[+]transaction deleted"))
+	msg := fmt.Sprintf("transaction deleted successfully")
+	return iz.Respond().Status(200).Text(msg)
 }
 
 func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {

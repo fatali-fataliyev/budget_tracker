@@ -203,7 +203,6 @@ func (mySql *MySQLStorage) GetTotalsByTypeAndCurrency(userID string, filters bud
 }
 
 func (mySql *MySQLStorage) GetTransactionById(userID string, transactionId string) (budget.Transaction, error) {
-
 	query := "SELECT id, amount, currency, category, created_date, updated_date, type, created_by FROM transactions WHERE created_by = ? AND id = ?;"
 	row := mySql.db.QueryRow(query, userID, transactionId)
 
@@ -268,7 +267,7 @@ func (mySql *MySQLStorage) DeleteTransaction(userID string, transactionId string
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
+		return fmt.Errorf("failed to check: are rows affected?: %w", err)
 	}
 	if rowsAffected == 0 {
 		return fmt.Errorf("transaction not found")
@@ -284,7 +283,7 @@ func (mySql *MySQLStorage) UpdateTransaction(userID string, t budget.UpdateTrans
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
+		return fmt.Errorf("failed to check: are rows affected?: %w", err)
 	}
 	if rowsAffected == 0 {
 		return fmt.Errorf("transaction not found")
