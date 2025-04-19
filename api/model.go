@@ -54,6 +54,7 @@ type NewUserRequest struct {
 
 type UserCreatedResponse struct {
 	Message string `json:"message"`
+	Token   string `json:"token"`
 }
 
 type AuthenticationResponse struct {
