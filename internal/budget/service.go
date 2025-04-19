@@ -45,12 +45,12 @@ type Storage interface {
 	SaveUser(newUser auth.User) error
 	SaveSession(session auth.Session) error
 	CheckSession(token string) (userId string, err error)
-	ExtendDateOfSession(userId string) error
+	UpdateSession(userId string, expireAt time.Time) error
+	GetSessionByToken(token string) (auth.Session, error)
 	SaveTransaction(t Transaction) error
 	GetFilteredTransactions(userID string, filters *ListTransactionsFilters) ([]Transaction, error)
 	GetTransactionById(userID string, transacationID string) (Transaction, error)
 	GetTotalsByTypeAndCurrency(userId string, filters GetTotals) (GetTotals, error)
-	GetUserIdByToken(token string) (string, error)
 	ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error)
 	IsUserExists(username string) (bool, error)
 	IsEmailConfirmed(emailAddress string) bool
@@ -96,18 +96,27 @@ func (bt *BudgetTracker) GenerateSession(credentialsPure auth.UserCredentialsPur
 }
 
 func (bt *BudgetTracker) CheckSession(token string) (string, error) {
-	userId, err := bt.storage.GetUserIdByToken(token)
+	session, err := bt.storage.GetSessionByToken(token)
 	if err != nil {
-		return "", fmt.Errorf("failed to check session: %w", err)
+		return "", fmt.Errorf("failed to get session: %w", err)
 	}
 
-	err = bt.storage.ExtendDateOfSession(userId)
-	if err == nil {
-		return userId, nil
-	}
-	_, err = bt.storage.CheckSession(token)
+	userId, err := bt.storage.CheckSession(token)
 	if err != nil {
 		return "", err
+	}
+
+	now := time.Now()
+	daysUntilExpiry := int(session.ExpireAt.Sub(now).Hours() / 24)
+
+	if daysUntilExpiry <= 5 {
+		newExpireAt := time.Now().AddDate(0, 1, 0)
+
+		err := bt.storage.UpdateSession(userId, newExpireAt)
+		if err != nil {
+			return "", fmt.Errorf("failed to update session")
+		}
+		return userId, nil
 	}
 	return userId, nil
 }
@@ -120,20 +129,20 @@ func (bt *BudgetTracker) IsUserExists(username string) (bool, error) {
 	return result, nil
 }
 
-func (bt *BudgetTracker) SaveUser(newUser auth.NewUser) error {
+func (bt *BudgetTracker) RegisterUser(newUser auth.NewUser) (string, error) {
 	isExists, err := bt.IsUserExists(newUser.UserName)
 	if err != nil {
-		return fmt.Errorf("failed to check username availability: %w", err)
+		return "", fmt.Errorf("failed to check username availability: %w", err)
 	}
 	if isExists {
-		return fmt.Errorf("%w: this '%s' username already taken", ErrConflict, newUser.UserName)
+		return "", fmt.Errorf("%w: this '%s' username already taken", ErrConflict, newUser.UserName)
 	}
 	if existingEmailAddress := bt.storage.IsEmailConfirmed(newUser.Email); existingEmailAddress != false {
-		return fmt.Errorf("%w: this: '%s' email address already taken and confirmed, try to register with another email.", ErrConflict, newUser.Email)
+		return "", fmt.Errorf("%w: this: '%s' email address already taken and confirmed, try to register with another email.", ErrConflict, newUser.Email)
 	}
 	hashedPassword, err := auth.HashPassword(newUser.PasswordPlain)
 	if err != nil {
-		return fmt.Errorf("failed to hash password: %w", err)
+		return "", fmt.Errorf("failed to hash password: %w", err)
 	}
 	user := auth.User{
 		ID:             uuid.New().String(),
@@ -146,9 +155,19 @@ func (bt *BudgetTracker) SaveUser(newUser auth.NewUser) error {
 	}
 
 	if err := bt.storage.SaveUser(user); err != nil {
-		return fmt.Errorf("registration failed: %w", err)
+		return "", fmt.Errorf("failed to save user: %w", err)
 	}
-	return nil
+
+	credentials := auth.UserCredentialsPure{
+		UserName:      newUser.UserName,
+		PasswordPlain: newUser.PasswordPlain,
+	}
+
+	token, err := bt.GenerateSession(credentials)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate session: %w", err)
+	}
+	return token, nil
 }
 
 func (bt *BudgetTracker) SaveTransaction(createdBy string, amount float64, category string, transcationType string, currency string) error {

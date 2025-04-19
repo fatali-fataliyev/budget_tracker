@@ -37,66 +37,62 @@ func (mySql *MySQLStorage) SaveSession(session auth.Session) error {
 	return nil
 }
 
-func (mySql *MySQLStorage) ExtendDateOfSession(userId string) error {
-	query := `SELECT expire_at FROM sessions WHERE user_id = ?`
+func (mySql *MySQLStorage) UpdateSession(user_id string, expireDate time.Time) error {
+	query := `UPDATE sessions SET expire_at = ? WHERE user_id = ?`
 
-	var expireAtString string
-
-	err := mySql.db.QueryRow(query, userId).Scan(&expireAtString)
+	res, err := mySql.db.Exec(query, expireDate, user_id)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("%w: session not found, login", budget.ErrInvalidInput)
-		}
-		return fmt.Errorf("failed to check session: %w", err)
+		return fmt.Errorf("failed to update session: %w", err)
 	}
 
-	expireAt, err := time.Parse("2006-01-02 15:04:05", expireAtString)
+	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to parse expire_at: %w", err)
-	}
-	nowRaw := time.Now().Format("2006-01-02 15:04:05")
-	now, err := time.Parse("2006-01-02 15:04:05", nowRaw)
-	if err != nil {
-		return fmt.Errorf("failed to parse now: %w", err)
+		return fmt.Errorf("failed to get affected rows: %w", err)
 	}
 
-	daysUntilExpiry := int(expireAt.Sub(now).Hours() / 24) // 5 day required (uzatma)
-
-	if daysUntilExpiry <= 5 {
-		newExpireAt := time.Now().AddDate(0, 1, 0)
-		query := "UPDATE sessions SET expire_at = ? WHERE user_id = ?;"
-
-		result, err := mySql.db.Exec(query, newExpireAt, userId)
-		if err != nil {
-			return fmt.Errorf("failed to extend session expiration date: %w", err)
-		}
-
-		rowsAffected, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("failed to check: extend or not %w", err)
-		}
-
-		if rowsAffected > 0 {
-			return nil
-		} else {
-			return fmt.Errorf("failed to extend session expiration date")
-		}
+	if rowsAffected == 0 {
+		return fmt.Errorf("%w: session not found", budget.ErrNotFound)
 	}
-	return fmt.Errorf("session still valid")
+	return nil
 }
 
-func (mySql *MySQLStorage) GetUserIdByToken(token string) (string, error) {
-	query := `SELECT user_id FROM sessions WHERE token = ?`
+func (mySql *MySQLStorage) GetSessionByToken(token string) (auth.Session, error) {
+	query := `SELECT id, token, created_at, expire_at, user_id FROM sessions WHERE token = ?`
 
-	var userId string
-	err := mySql.db.QueryRow(query, token).Scan(&userId)
+	var dSession dbSession
+	err := mySql.db.QueryRow(query, token).Scan(
+		&dSession.ID,
+		&dSession.Token,
+		&dSession.CreatedAt,
+		&dSession.ExpireAt,
+		&dSession.UserID,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("%w: user id not found", budget.ErrNotFound)
+			return auth.Session{}, fmt.Errorf("%w: user id not found", budget.ErrNotFound)
 		}
-		return "", fmt.Errorf("%w: invalid token", budget.ErrInvalidInput)
+		return auth.Session{}, fmt.Errorf("%w: invalid token: %w", budget.ErrInvalidInput, err)
 	}
-	return userId, nil
+
+	createdAt, err := time.Parse("2006-01-02 15:04:05", dSession.CreatedAt)
+	fmt.Println(createdAt)
+	if err != nil {
+		return auth.Session{}, fmt.Errorf("failed to parse created_at")
+	}
+	expireAt, err := time.Parse("2006-01-02 15:04:05", dSession.ExpireAt)
+	if err != nil {
+		return auth.Session{}, fmt.Errorf("failed to parse expire_at")
+	}
+
+	session := auth.Session{
+		ID:        dSession.ID,
+		Token:     dSession.Token,
+		CreatedAt: createdAt,
+		ExpireAt:  expireAt,
+		UserID:    dSession.UserID,
+	}
+
+	return session, nil
 }
 
 func (mySql *MySQLStorage) CheckSession(token string) (string, error) {
@@ -117,15 +113,7 @@ func (mySql *MySQLStorage) CheckSession(token string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to parse expire_at: %w", err)
 	}
-	nowRaw := time.Now().Format("2006-01-02 15:04:05")
-	now, err := time.Parse("2006-01-02 15:04:05", nowRaw)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse now: %w", err)
-	}
-
-	fmt.Println("expireAt:", expireAt)
-	fmt.Println("now     :", now)
-	fmt.Println("expired?:", expireAt.Before(now))
+	now := time.Now()
 
 	if expireAt.Before(now) {
 		return "", fmt.Errorf("%w: session expired, please login again", budget.ErrAuth)
@@ -380,7 +368,7 @@ func (mySql *MySQLStorage) IsEmailConfirmed(emailAddress string) bool {
 }
 
 func (mySql *MySQLStorage) LogoutUser(userId string, token string) error {
-	query := "UPDATE sessions SET expire_at = NOW() - INTERVAL 1 SECOND WHERE user_id = ? AND token = ?"
+	query := "UPDATE sessions SET expire_at = UTC_TIMESTAMP() - INTERVAL 1 SECOND WHERE user_id = ? AND token = ?"
 
 	_, err := mySql.db.Exec(query, userId, token)
 	if err != nil {
