@@ -1,11 +1,8 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"net/http"
-	"os"
-	"time"
 
 	"github.com/0xcafe-io/iz"
 	"github.com/fatali-fataliyev/budget_tracker/api"
@@ -13,54 +10,25 @@ import (
 	"github.com/fatali-fataliyev/budget_tracker/internal/storage"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/subosito/gotenv"
 )
 
 var bt budget.BudgetTracker // Global
 
-func initDB() (*sql.DB, error) {
-	err := gotenv.Load()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load env variables")
-	}
-	username := os.Getenv("DBUSER")
-	password := os.Getenv("DBPASS")
-	dbname := os.Getenv("DBNAME")
-
-	fmt.Println("Initializing Database...")
-
-	db, err := sql.Open("mysql", username+":"+password+"@tcp(localhost:3306)/"+dbname)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-
-	for err := db.Ping(); err != nil; {
-		time.Sleep(1 * time.Second)
-	}
-	fmt.Println("connected.")
-	return db, nil
-}
-
 func main() {
-	if err := logging.Init("error"); err != nil {
-		fmt.Println("logger initalize failed: %w", err)
+	if err := logging.Init("debug"); err != nil {
+		fmt.Println("failed to initalize logger: %w", err)
 		return
 	}
+	logging.Logger.Info("application started")
 
-	logging.Logger.Info("Application started")
-	logging.Logger.Debug("This is a debug message")
-	logging.Logger.Warn("Warning: Something minor happened")
-	logging.Logger.Error("Error: Something went wrong")
-
-	db, err := initDB()
-	_ = db
+	db, err := storage.Init()
 	if err != nil {
-		fmt.Println("failed to initialize database: ", err)
+		logging.Logger.Errorf("failed to initalize database: %v", err)
 		return
 	}
 	storageInstance := storage.NewMySQLStorage(db)
 	if storageInstance == nil {
-		fmt.Println("failed to initialize storage")
+		logging.Logger.Errorf("failed to create instance of database: %v", err)
 		return
 	}
 
@@ -74,17 +42,17 @@ func main() {
 	server.HandleFunc("POST /logout", iz.Bind(api.LogoutUserHandler))
 	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))
 	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler))
-	server.HandleFunc("GET /total", iz.Bind(api.GetTotalsByTypeAndCurrencyHandler))
+	server.HandleFunc("GET /total", iz.Bind(api.GetTotals))
 	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler))
-	// GET -> transaction/id
 	server.HandleFunc("PUT /transaction/{id}", iz.Bind(api.UpdateTransactionHandler))
 	server.HandleFunc("DELETE /transaction/{id}", iz.Bind(api.DeleteTransactionHandler))
 
 	port := "8080"
-	fmt.Println("Listen: http://localhost:" + port)
 	err = http.ListenAndServe(":"+port, server)
 	if err != nil {
-		fmt.Println("failed to start server: ", err)
+		logging.Logger.Errorf("failed to start server: %v", err)
 		return
 	}
+	logging.Logger.Infof("server started: address: %s port: %s", "http://localhost", port)
+	fmt.Println("server is running")
 }
