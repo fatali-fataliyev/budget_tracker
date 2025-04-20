@@ -1,8 +1,0 @@
-time="2025-04-20T11:41:49+04:00" level=info msg="Application started"
-time="2025-04-20T11:41:49+04:00" level=debug msg="This is a debug message"
-time="2025-04-20T11:41:49+04:00" level=warning msg="Warning: Something minor happened"
-time="2025-04-20T11:41:49+04:00" level=error msg="Error: Something went wrong"
-time="2025-04-20T11:42:38+04:00" level=info msg="Application started"
-time="2025-04-20T11:42:38+04:00" level=debug msg="This is a debug message"
-time="2025-04-20T11:42:38+04:00" level=warning msg="Warning: Something minor happened"
-time="2025-04-20T11:42:38+04:00" level=error msg="Error: Something went wrong"
