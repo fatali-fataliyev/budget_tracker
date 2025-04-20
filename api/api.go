@@ -8,6 +8,7 @@ import (
 	"github.com/0xcafe-io/iz"
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
+	"github.com/fatali-fataliyev/budget_tracker/logging"
 )
 
 type Api struct {
@@ -36,7 +37,8 @@ func (api *Api) SaveUserHandler(r *iz.Request) iz.Responder {
 	defer r.Body.Close()
 	token, err := api.Service.RegisterUser(newUser)
 	if err != nil {
-		msg := fmt.Sprintf("registration failed: %s", err.Error())
+		logging.Logger.Errorf("Registration failed: %v", err)
+		msg := fmt.Sprintf("registration failed")
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 
@@ -62,17 +64,17 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 
 	var newTransaction CreateTransactionRequest
 	if err := json.NewDecoder(r.Body).Decode(&newTransaction); err != nil {
-		msg := fmt.Sprintf("failed to parse request: %s", err.Error())
+		logging.Logger.Errorf("Failed to parse save transaction request: %v", err)
+		msg := fmt.Sprintf("failed to parse save transaction request")
 		return iz.Respond().Status(500).Text(msg)
 	}
-
 	defer r.Body.Close()
 
 	if err := api.Service.SaveTransaction(userId, newTransaction.Amount, newTransaction.Category, newTransaction.Ttype, newTransaction.Currency); err != nil {
-		msg := fmt.Sprintf("create transaction failed: %s", err.Error())
+		logging.Logger.Errorf("Failed to create transaction request: %v", err)
+		msg := fmt.Sprintf("failed to create transaction")
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
-
 	msg := fmt.Sprintf("transaction successfully created")
 	return iz.Respond().Status(201).Text(msg)
 
@@ -95,27 +97,27 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 
 	filters, err := ListValidateParams(params)
 	if err != nil {
-		msg := fmt.Sprintf("invalid parameteres: %s", err.Error())
+		msg := fmt.Sprintf("invalid filter parameteres: %s", err.Error())
 		return iz.Respond().Status(400).Text(msg)
 	}
 
 	ts, err := api.Service.GetFilteredTransactions(userId, filters)
 	if err != nil {
-		msg := fmt.Sprintf("failed to get transactions: %s", err.Error())
+		logging.Logger.Errorf("Failed to get filtered transactions request: %v", err)
+		msg := fmt.Sprintf("failed to get transactions")
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 
 	tsForHttp := make([]TransactionItem, 0, len(ts))
 
 	for _, t := range ts {
-		tForHttpItem := TransactionToHttp(t)
-		tsForHttp = append(tsForHttp, tForHttpItem)
+		tForHttp := TransactionToHttp(t)
+		tsForHttp = append(tsForHttp, tForHttp)
 	}
 	return iz.Respond().Status(200).JSON(tsForHttp)
 }
 
-// TODO: rename to GetTotals because is dosen't scale for new fields(+Name,+Surname)
-func (api *Api) GetTotalsByTypeAndCurrencyHandler(r *iz.Request) iz.Responder {
+func (api *Api) GetTotals(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
 		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
@@ -137,9 +139,10 @@ func (api *Api) GetTotalsByTypeAndCurrencyHandler(r *iz.Request) iz.Responder {
 		return iz.Respond().Status(400).Text(msg)
 	}
 
-	result, err := api.Service.GetTotalsByTypeAndCurrency(userId, *filterFields)
+	result, err := api.Service.GetTotals(userId, *filterFields)
 	if err != nil {
-		msg := fmt.Sprintf("failed to get totals by type and currency: %s", err.Error())
+		logging.Logger.Errorf("Failed to get total by type and currency request: %v", err)
+		msg := fmt.Sprintf("failed to get totals by type and currency")
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 
@@ -151,7 +154,6 @@ func (api *Api) GetTotalsByTypeAndCurrencyHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(200).JSON(resultForHttp)
 }
 
-// TODO return 404 if not found
 func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -169,6 +171,7 @@ func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 
 	t, err := api.Service.GetTranscationById(userId, tId)
 	if err != nil {
+		logging.Logger.Errorf("Failed to get transaction by Id request: %v", err)
 		msg := fmt.Sprintf("failed to get transaction by ID: %s", err.Error())
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
@@ -208,7 +211,8 @@ func (api *Api) UpdateTransactionHandler(r *iz.Request) iz.Responder {
 	defer r.Body.Close()
 
 	if err := api.Service.UpdateTransaction(userId, updatedReq); err != nil {
-		msg := fmt.Sprintf("failed to update transaction: %v", err)
+		logging.Logger.Errorf("Failed to update transaction request: %v", err)
+		msg := fmt.Sprintf("failed to update transaction")
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 
@@ -232,7 +236,8 @@ func (api *Api) DeleteTransactionHandler(r *iz.Request) iz.Responder {
 	tId := r.PathValue("id")
 
 	if err := api.Service.DeleteTransaction(userId, tId); err != nil {
-		msg := fmt.Sprintf("failed to delete transaction: %s", err.Error())
+		logging.Logger.Errorf("Failed to delete transaction request: %v", err)
+		msg := fmt.Sprintf("failed to delete transaction")
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 	msg := fmt.Sprintf("transaction deleted successfully")
@@ -245,8 +250,10 @@ func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
 		msg := fmt.Sprintf("invalid request body")
 		return iz.Respond().Status(400).Text(msg)
 	}
-	fmt.Println(loginRequest.UserName)
-	fmt.Println(loginRequest.Password)
+
+	logging.Logger.Debugf("username: %s", loginRequest.UserName)
+	logging.Logger.Debugf("password: %s", loginRequest.Password)
+
 	credentials := auth.UserCredentialsPure{
 		UserName:      loginRequest.UserName,
 		PasswordPlain: loginRequest.Password,
@@ -259,7 +266,7 @@ func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
 		response.Message = err.Error()
 		return iz.Respond().Status(httpStatusFromError(err)).JSON(response)
 	}
-	response.Message = "login successful"
+	response.Message = "You've logged in successfully!"
 	response.Token = token
 	return iz.Respond().Status(200).JSON(response)
 }
@@ -278,10 +285,11 @@ func (api *Api) LogoutUserHandler(r *iz.Request) iz.Responder {
 	}
 
 	if err := api.Service.LogoutUser(userId, token); err != nil {
-		msg := fmt.Sprintf("logout failed: %s", err.Error())
+		logging.Logger.Errorf("Logout failed: %v", err)
+		msg := fmt.Sprintf("logout failed")
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
-	msg := fmt.Sprintf("logout successful")
+	msg := "Logout successful."
 	return iz.Respond().Status(200).Text(msg)
 }
 

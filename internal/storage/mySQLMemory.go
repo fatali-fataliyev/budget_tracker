@@ -4,18 +4,45 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
+	"github.com/fatali-fataliyev/budget_tracker/logging"
+	"github.com/subosito/gotenv"
 )
+
+func Init() (*sql.DB, error) {
+	err := gotenv.Load()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load env variables for database: %w", err)
+	}
+	username := os.Getenv("DBUSER")
+	password := os.Getenv("DBPASS")
+	dbname := os.Getenv("DBNAME")
+
+	logging.Logger.Info("Initializing database...")
+
+	db, err := sql.Open("mysql", username+":"+password+"@tcp(localhost:3306)/"+dbname)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	for err := db.Ping(); err != nil; {
+		time.Sleep(2 * time.Second)
+	}
+	logging.Logger.Info("Connected to database")
+	return db, nil
+}
 
 type MySQLStorage struct {
 	db *sql.DB
 }
 
 func NewMySQLStorage(db *sql.DB) *MySQLStorage {
+	logging.Logger.Debug("New mysql storage created")
 	return &MySQLStorage{db: db}
 }
 
@@ -75,7 +102,6 @@ func (mySql *MySQLStorage) GetSessionByToken(token string) (auth.Session, error)
 	}
 
 	createdAt, err := time.Parse("2006-01-02 15:04:05", dSession.CreatedAt)
-	fmt.Println(createdAt)
 	if err != nil {
 		return auth.Session{}, fmt.Errorf("failed to parse created_at")
 	}
@@ -229,7 +255,7 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budge
 	return transactions, nil
 }
 
-func (mySql *MySQLStorage) GetTotalsByTypeAndCurrency(userID string, filters budget.GetTotals) (budget.GetTotals, error) {
+func (mySql *MySQLStorage) GetTotals(userID string, filters budget.GetTotals) (budget.GetTotals, error) {
 	var query string
 	args := []interface{}{
 		userID,

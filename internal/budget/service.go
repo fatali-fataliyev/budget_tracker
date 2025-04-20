@@ -50,7 +50,7 @@ type Storage interface {
 	SaveTransaction(t Transaction) error
 	GetFilteredTransactions(userID string, filters *ListTransactionsFilters) ([]Transaction, error)
 	GetTransactionById(userID string, transacationID string) (Transaction, error)
-	GetTotalsByTypeAndCurrency(userId string, filters GetTotals) (GetTotals, error)
+	GetTotals(userId string, filters GetTotals) (GetTotals, error)
 	ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error)
 	IsUserExists(username string) (bool, error)
 	IsEmailConfirmed(emailAddress string) bool
@@ -165,7 +165,7 @@ func (bt *BudgetTracker) RegisterUser(newUser auth.NewUser) (string, error) {
 
 	token, err := bt.GenerateSession(credentials)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate session: %w", err)
+		return "", fmt.Errorf("failed to generate session: %w | please login", err)
 	}
 	return token, nil
 }
@@ -216,8 +216,8 @@ func (bt *BudgetTracker) GetFilteredTransactions(userId string, filters *ListTra
 	return ts, nil
 }
 
-func (bt *BudgetTracker) GetTotalsByTypeAndCurrency(userId string, filters GetTotals) (GetTotals, error) {
-	result, err := bt.storage.GetTotalsByTypeAndCurrency(userId, filters)
+func (bt *BudgetTracker) GetTotals(userId string, filters GetTotals) (GetTotals, error) {
+	result, err := bt.storage.GetTotals(userId, filters)
 	if err != nil {
 		return GetTotals{}, fmt.Errorf("failed to get totals: %w", err)
 	}
