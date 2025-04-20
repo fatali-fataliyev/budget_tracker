@@ -148,8 +148,8 @@ func (mySql *MySQLStorage) CheckSession(token string) (string, error) {
 }
 
 func (mySql *MySQLStorage) SaveTransaction(t budget.Transaction) error {
-	query := "INSERT INTO transactions (id, amount, currency, category, created_date, updated_date, type, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
-	_, err := mySql.db.Exec(query, t.ID, t.Amount, t.Currency, t.Category, t.CreatedDate, t.UpdatedDate, t.Type, t.CreatedBy)
+	query := "INSERT INTO transactions (id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);"
+	_, err := mySql.db.Exec(query, t.ID, t.Amount, t.Limit, t.Currency, t.Category, t.CreatedDate, t.UpdatedDate, t.Type, t.CreatedBy)
 	if err != nil {
 		return fmt.Errorf("failed to save transaction: %w", err)
 	}
@@ -177,9 +177,9 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budge
 	}
 
 	if filters.IsAllNil {
-		query = "SELECT id, amount, currency, category, created_date, updated_date, type, created_by FROM transactions WHERE created_by = ?;"
+		query = "SELECT id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by FROM transactions WHERE created_by = ?;"
 	} else if len(filters.Categories) == 0 {
-		query = `SELECT id, amount, currency, category, created_date, updated_date, type, created_by 
+		query = `SELECT id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by 
           FROM transactions 
           WHERE created_by = ? 
           AND (? IS NULL OR amount >= ?) 
@@ -199,7 +199,7 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budge
 		for idx, category := range filters.Categories {
 			categories[idx] = category
 		}
-		query = `SELECT id, amount, currency, category, created_date, updated_date, type, created_by 
+		query = `SELECT id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by 
           FROM transactions 
           WHERE created_by = ? 
           AND (? IS NULL OR amount >= ?) 
@@ -227,7 +227,7 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budge
 	var transactions []budget.Transaction
 	for rows.Next() {
 		var t dbTransaction
-		err := rows.Scan(&t.ID, &t.Amount, &t.Currency, &t.Category, &t.CreatedDate, &t.UpdatedDate, &t.Type, &t.CreatedBy)
+		err := rows.Scan(&t.ID, &t.Amount, &t.Limit, &t.Currency, &t.Category, &t.CreatedDate, &t.UpdatedDate, &t.Type, &t.CreatedBy)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan transaction: %w", err)
 		}
@@ -240,15 +240,24 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budge
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse updated_date")
 		}
+		var usagePercent int
+		if t.Limit != 0 {
+			usagePercent = (int(t.Amount) * 100) / int(t.Limit)
+		} else {
+			usagePercent = 0
+		}
+
 		budgetT := budget.Transaction{
-			ID:          t.ID,
-			Amount:      t.Amount,
-			Currency:    t.Currency,
-			Category:    t.Category,
-			CreatedDate: createdDate,
-			UpdatedDate: updatedDate,
-			Type:        t.Type,
-			CreatedBy:   t.CreatedBy,
+			ID:           t.ID,
+			Amount:       t.Amount,
+			Limit:        t.Limit,
+			UsagePercent: usagePercent,
+			Currency:     t.Currency,
+			Category:     t.Category,
+			CreatedDate:  createdDate,
+			UpdatedDate:  updatedDate,
+			Type:         t.Type,
+			CreatedBy:    t.CreatedBy,
 		}
 		transactions = append(transactions, budgetT)
 	}
@@ -284,11 +293,11 @@ func (mySql *MySQLStorage) GetTotals(userID string, filters budget.GetTotals) (b
 }
 
 func (mySql *MySQLStorage) GetTransactionById(userID string, transactionId string) (budget.Transaction, error) {
-	query := "SELECT id, amount, currency, category, created_date, updated_date, type, created_by FROM transactions WHERE created_by = ? AND id = ?;"
+	query := "SELECT id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by FROM transactions WHERE created_by = ? AND id = ?;"
 	row := mySql.db.QueryRow(query, userID, transactionId)
 
 	var t dbTransaction
-	err := row.Scan(&t.ID, &t.Amount, &t.Currency, &t.Category, &t.CreatedDate, &t.UpdatedDate, &t.Type, &t.CreatedBy)
+	err := row.Scan(&t.ID, &t.Amount, &t.Limit, &t.Currency, &t.Category, &t.CreatedDate, &t.UpdatedDate, &t.Type, &t.CreatedBy)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return budget.Transaction{}, fmt.Errorf("%w: transaction not found", budget.ErrNotFound)
@@ -304,15 +313,23 @@ func (mySql *MySQLStorage) GetTransactionById(userID string, transactionId strin
 	if err != nil {
 		return budget.Transaction{}, fmt.Errorf("failed to parse updated_date")
 	}
+	var usagePercent int
+	if t.Limit != 0 {
+		usagePercent = (int(t.Amount) * 100) / int(t.Limit)
+	} else {
+		usagePercent = 0
+	}
 	budgetT := budget.Transaction{
-		ID:          t.ID,
-		Amount:      t.Amount,
-		Currency:    t.Currency,
-		Category:    t.Category,
-		CreatedDate: createdDate,
-		UpdatedDate: updatedDate,
-		Type:        t.Type,
-		CreatedBy:   t.CreatedBy,
+		ID:           t.ID,
+		Amount:       t.Amount,
+		Limit:        t.Limit,
+		UsagePercent: usagePercent,
+		Currency:     t.Currency,
+		Category:     t.Category,
+		CreatedDate:  createdDate,
+		UpdatedDate:  updatedDate,
+		Type:         t.Type,
+		CreatedBy:    t.CreatedBy,
 	}
 	return budgetT, nil
 }
@@ -330,7 +347,7 @@ func (mySql *MySQLStorage) ValidateUser(credentials auth.UserCredentialsPure) (a
 		return auth.User{}, fmt.Errorf("failed to scan user: %w", err)
 	}
 	if auth.ComparePasswords(user.PasswordHashed, credentials.PasswordPlain) != true {
-		return auth.User{}, fmt.Errorf("password is wrong")
+		return auth.User{}, fmt.Errorf("%w: password is wrong", budget.ErrInvalidInput)
 	}
 	return user, nil
 }
@@ -352,8 +369,8 @@ func (mySql *MySQLStorage) DeleteTransaction(userID string, transactionId string
 	return nil
 }
 func (mySql *MySQLStorage) UpdateTransaction(userID string, t budget.UpdateTransactionItem) error {
-	query := "UPDATE transactions SET amount = ?, currency = ?, category = ?, updated_date = ?, type = ? WHERE created_by = ? AND id = ?;"
-	result, err := mySql.db.Exec(query, t.Amount, t.Currency, t.Category, t.UpdatedDate, t.Type, userID, t.ID)
+	query := "UPDATE transactions SET amount = ?, limit_for_amount = ?, currency = ?, category = ?, updated_date = ?, type = ? WHERE created_by = ? AND id = ?;"
+	result, err := mySql.db.Exec(query, t.Amount, t.Limit, t.Currency, t.Category, t.UpdatedDate, t.Type, userID, t.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update transaction: %w", err)
 	}
@@ -364,6 +381,28 @@ func (mySql *MySQLStorage) UpdateTransaction(userID string, t budget.UpdateTrans
 	}
 	if rowsAffected == 0 {
 		return fmt.Errorf("%w: transaction not found", budget.ErrNotFound)
+	}
+	return nil
+}
+
+func (mySql *MySQLStorage) ChangeAmountOfTransaction(userId string, tId string, tType string, amount float64) error {
+	var query string
+	if tType == "+" {
+		query = `
+			UPDATE transactions 
+			SET amount = amount + ? 
+			WHERE id = ? AND created_by = ?
+		`
+	} else {
+		query = `
+			UPDATE transactions 
+			SET amount = amount - ? 
+			WHERE id = ? AND created_by = ?
+		`
+	}
+	_, err := mySql.db.Exec(query, amount, tId, userId)
+	if err != nil {
+		return fmt.Errorf("failed to update transaction amount: %w", err)
 	}
 	return nil
 }

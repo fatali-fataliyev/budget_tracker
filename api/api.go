@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/0xcafe-io/iz"
@@ -70,14 +71,13 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 	}
 	defer r.Body.Close()
 
-	if err := api.Service.SaveTransaction(userId, newTransaction.Amount, newTransaction.Category, newTransaction.Ttype, newTransaction.Currency); err != nil {
+	if err := api.Service.SaveTransaction(userId, newTransaction.Amount, newTransaction.Limit, newTransaction.Category, newTransaction.Ttype, newTransaction.Currency); err != nil {
 		logging.Logger.Errorf("Failed to create transaction request: %v", err)
 		msg := fmt.Sprintf("failed to create transaction")
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 	msg := fmt.Sprintf("transaction successfully created")
 	return iz.Respond().Status(201).Text(msg)
-
 }
 
 func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
@@ -192,22 +192,45 @@ func (api *Api) UpdateTransactionHandler(r *iz.Request) iz.Responder {
 		return iz.Respond().Status(401).Text(msg)
 	}
 
+	tId := r.PathValue("id")
+	params := r.URL.Query()
+
+	tType := params.Get("type")
+	amountString := params.Get("amount")
+	if tType != "" && amountString != "" {
+		amountFloat, err := strconv.ParseFloat(amountString, 64)
+		if err != nil {
+			logging.Logger.Errorf("Failed to parse change transaction amount: %v", err)
+			msg := fmt.Sprintf("failed to parse amount")
+			return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+		}
+
+		err = api.Service.ChangeAmountOfTransaction(userId, tId, tType, amountFloat)
+		if err != nil {
+			logging.Logger.Errorf("Failed to change transaction amount: %v", err)
+			msg := fmt.Sprintf("failed to change transaction amount")
+			return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+		}
+		msg := fmt.Sprintf("amount successfully changed")
+		return iz.Respond().Status(200).Text(msg)
+	}
+
 	var updateReq UpdateTransactionRequest
 	if err := json.NewDecoder(r.Body).Decode(&updateReq); err != nil {
 		msg := fmt.Sprintf("Invalid request payload %s", err.Error())
 		return iz.Respond().Status(400).Text(msg)
 	}
 
-	tId := r.PathValue("id")
-
 	updatedReq := budget.UpdateTransactionItem{
 		ID:          tId,
 		Amount:      updateReq.Amount,
+		Limit:       updateReq.Limit,
 		Currency:    updateReq.Currency,
 		Category:    updateReq.Category,
 		UpdatedDate: time.Now(),
 		Type:        updateReq.Type,
 	}
+
 	defer r.Body.Close()
 
 	if err := api.Service.UpdateTransaction(userId, updatedReq); err != nil {
@@ -295,13 +318,15 @@ func (api *Api) LogoutUserHandler(r *iz.Request) iz.Responder {
 
 func TransactionToHttp(transcation budget.Transaction) TransactionItem {
 	return TransactionItem{
-		ID:          transcation.ID,
-		Amount:      transcation.Amount,
-		Currency:    transcation.Currency,
-		Category:    transcation.Category,
-		CreatedDate: transcation.CreatedDate.Format("02/01/2006 15:04"),
-		UpdatedDate: transcation.UpdatedDate.Format("02/01/2006 15:04"),
-		Type:        transcation.Type,
-		CreatedBy:   transcation.CreatedBy,
+		ID:           transcation.ID,
+		Amount:       transcation.Amount,
+		Limit:        transcation.Limit,
+		UsagePercent: transcation.UsagePercent,
+		Currency:     transcation.Currency,
+		Category:     transcation.Category,
+		CreatedAt:    transcation.CreatedDate.Format("02/01/2006 15:04"),
+		UpdatedAt:    transcation.UpdatedDate.Format("02/01/2006 15:04"),
+		Type:         transcation.Type,
+		CreatedBy:    transcation.CreatedBy,
 	}
 }

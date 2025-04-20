@@ -3,6 +3,7 @@ package storage
 type dbTransaction struct {
 	ID          string
 	Amount      float64
+	Limit       float64
 	Currency    string
 	Category    string
 	CreatedDate string

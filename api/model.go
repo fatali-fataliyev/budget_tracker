@@ -14,6 +14,7 @@ import (
 type CreateTransactionRequest struct {
 	Ttype    string  `json:"type"`
 	Amount   float64 `json:"amount"`
+	Limit    float64 `json:"limit"`
 	Category string  `json:"category"`
 	Currency string  `json:"currency"`
 }
@@ -30,14 +31,12 @@ type UserLoginRequest struct {
 	UserName string `json:"username"`
 	Password string `json:"password"`
 }
-
 type UpdateTransactionRequest struct {
-	ID          string  `json:"id"`
-	Amount      float64 `json:"amount"`
-	Currency    string  `json:"currency"`
-	Category    string  `json:"category"`
-	UpdatedDate string  `json:"updated_date"`
-	Type        string  `json:"type"`
+	Type     string  `json:"type"`
+	Amount   float64 `json:"amount"`
+	Limit    float64 `json:"limit"`
+	Category string  `json:"category"`
+	Currency string  `json:"currency"`
 }
 
 type NewUserRequest struct {
@@ -58,19 +57,20 @@ type UserCreatedResponse struct {
 }
 
 type AuthenticationResponse struct {
-	Message string
-	Token   string
+	Message string `json:"message"`
+	Token   string `json:"token"`
 }
-
 type TransactionItem struct {
-	ID          string  `json:"id"`
-	Amount      float64 `json:"amount"`
-	Currency    string  `json:"currency"`
-	Category    string  `json:"category"`
-	CreatedDate string  `json:"created_date"`
-	UpdatedDate string  `json:"updated_date"`
-	Type        string  `json:"type"`
-	CreatedBy   string  `json:"created_by"`
+	ID           string  `json:"id"`
+	Amount       float64 `json:"amount"`
+	Limit        float64 `json:"limit"`
+	UsagePercent int     `json:"usage_percent"`
+	Currency     string  `json:"currency"`
+	Category     string  `json:"category"`
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
+	Type         string  `json:"type"`
+	CreatedBy    string  `json:"created_by"`
 }
 
 type ListTransactionResponse struct {
