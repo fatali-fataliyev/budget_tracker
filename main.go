@@ -11,6 +11,7 @@ import (
 	"github.com/fatali-fataliyev/budget_tracker/api"
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 	"github.com/fatali-fataliyev/budget_tracker/internal/storage"
+	"github.com/fatali-fataliyev/budget_tracker/logging"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/subosito/gotenv"
 )
@@ -41,6 +42,16 @@ func initDB() (*sql.DB, error) {
 }
 
 func main() {
+	if err := logging.Init("error"); err != nil {
+		fmt.Println("logger initalize failed: %w", err)
+		return
+	}
+
+	logging.Logger.Info("Application started")
+	logging.Logger.Debug("This is a debug message")
+	logging.Logger.Warn("Warning: Something minor happened")
+	logging.Logger.Error("Error: Something went wrong")
+
 	db, err := initDB()
 	_ = db
 	if err != nil {
