@@ -19,7 +19,7 @@ func main() {
 		fmt.Println("failed to initalize logger: %w", err)
 		return
 	}
-	logging.Logger.Info("application started")
+	logging.Logger.Info("Application started")
 
 	db, err := storage.Init()
 	if err != nil {
@@ -47,12 +47,11 @@ func main() {
 	server.HandleFunc("PUT /transaction/{id}", iz.Bind(api.UpdateTransactionHandler))
 	server.HandleFunc("DELETE /transaction/{id}", iz.Bind(api.DeleteTransactionHandler))
 
+	fmt.Println("server is running")
 	port := "8080"
 	err = http.ListenAndServe(":"+port, server)
 	if err != nil {
 		logging.Logger.Errorf("failed to start server: %v", err)
 		return
 	}
-	logging.Logger.Infof("server started: address: %s port: %s", "http://localhost", port)
-	fmt.Println("server is running")
 }
