@@ -1,8 +1,13 @@
 package api
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"io"
 	"strconv"
 	"time"
 
@@ -10,6 +15,7 @@ import (
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
+	"github.com/nfnt/resize"
 )
 
 type Api struct {
@@ -241,6 +247,59 @@ func (api *Api) UpdateTransactionHandler(r *iz.Request) iz.Responder {
 
 	msg := fmt.Sprintf("transaction updated successfully")
 	return iz.Respond().Status(200).Text(msg)
+}
+
+func (api *Api) ImageToTransactionHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+	_ = userId
+
+	r.ParseMultipartForm(10 << 20) // menasi byte wise'dir, yeni max 20mb ola biler file olchusu
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		msg := fmt.Sprintf("failed to receiving file")
+		return iz.Respond().Status(400).Text(msg)
+	}
+	defer file.Close()
+
+	var buf bytes.Buffer //buffer
+	size, err := io.Copy(&buf, file)
+	if err != nil {
+		msg := fmt.Sprintf("failed to read file")
+		return iz.Respond().Status(500).Text(msg)
+	}
+
+	imgData := buf.Bytes()
+
+	const maxSize = 1 << 20 // 20mb limitdir
+	if size > maxSize {
+		logging.Logger.Debug("compressing image...")
+		img, _, err := image.Decode(bytes.NewReader(imgData))
+		if err != nil {
+			msg := fmt.Sprintf("invalid image format")
+			return iz.Respond().Status(400).Text(msg)
+		}
+
+		//resize compressing uchun, 1800PX[Height] olacaq 800PX[Height], common solution
+		resized := resize.Resize(0, 800, img, resize.Lanczos3)
+		var compressed bytes.Buffer
+		jpeg.Encode(&compressed, resized, &jpeg.Options{Quality: 100})
+
+		imgData = compressed.Bytes()
+	}
+
+	base64Str := base64.StdEncoding.EncodeToString(imgData)
+
+	return iz.Respond()
 }
 
 func (api *Api) DeleteTransactionHandler(r *iz.Request) iz.Responder {
