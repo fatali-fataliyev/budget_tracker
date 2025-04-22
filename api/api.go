@@ -2,12 +2,12 @@ package api
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"io"
+	"os"
 	"strconv"
 	"time"
 
@@ -16,6 +16,7 @@ import (
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
 	"github.com/nfnt/resize"
+	ocr "github.com/ranghetto/go_ocr_space"
 )
 
 type Api struct {
@@ -297,9 +298,24 @@ func (api *Api) ImageToTransactionHandler(r *iz.Request) iz.Responder {
 		imgData = compressed.Bytes()
 	}
 
-	base64Str := base64.StdEncoding.EncodeToString(imgData)
+	// base64Str := base64.StdEncoding.EncodeToString(imgData)
 
 	return iz.Respond()
+}
+
+func RequestToFreeOCR(base64ImageString string) ([]string, error) {
+	apiKey := os.Getenv("OCR_APIKEY")
+
+	config := ocr.InitConfig(apiKey, "eng", ocr.OCREngine1) //engine3, pulludur.
+
+	result, err := config.ParseFromLocal("./transaction.png")
+	if err != nil {
+		fmt.Println(err)
+	}
+	//printing the just the parsed text
+	fmt.Println(result.JustText())
+
+	return nil, nil
 }
 
 func (api *Api) DeleteTransactionHandler(r *iz.Request) iz.Responder {

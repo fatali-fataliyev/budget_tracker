@@ -300,6 +300,10 @@ func (bt *BudgetTracker) ChangeAmountOfTransaction(userId string, tId string, tT
 	return nil
 }
 
+func (bt *BudgetTracker) ImageToTransaction(base64String string) {
+	///
+}
+
 func (bt *BudgetTracker) DeleteTransaction(userId string, transactionId string) error {
 	tItem, err := bt.storage.GetTransactionById(userId, transactionId)
 	if err != nil {
