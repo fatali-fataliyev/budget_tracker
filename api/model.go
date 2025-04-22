@@ -83,6 +83,13 @@ type GetTotalsResponse struct {
 	Total    float64 `json:"total"`
 }
 
+type ImageToTransactionResponse struct {
+	FullAmounts []string `json:"amounts"`
+	Categories  []string `json:"categories"`
+	Types       []string `json:"types"`
+	CreatedDate []string `json:"created_date"`
+}
+
 func httpStatusFromError(err error) int {
 	switch {
 	case errors.Is(err, budget.ErrNotFound):
