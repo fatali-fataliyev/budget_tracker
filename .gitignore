@@ -25,5 +25,5 @@ go.work.sum
 
 # env file
 .env
-local
-logging/logs
+local/
+logging/logs/
