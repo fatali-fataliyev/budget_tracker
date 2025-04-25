@@ -47,6 +47,13 @@ type NewUserRequest struct {
 	Password string `json:"password"`
 }
 
+type NewCategoryRequest struct {
+	Name       string  `json:"name"`
+	Type       string  `json:"type"`
+	MaxAmount  float64 `json:"max_amount"`
+	PeriodDays int     `json:"period_days"`
+}
+
 //REQUESTS END:
 
 //RESPONSES:

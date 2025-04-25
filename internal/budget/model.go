@@ -9,9 +9,11 @@ import (
 type Category struct {
 	ID          string
 	Name        string
+	Type        string
 	CreatedDate time.Time
 	UpdatedDate time.Time
 	MaxAmount   float64
+	PeriodDays  int
 	CreatedBy   string
 }
 

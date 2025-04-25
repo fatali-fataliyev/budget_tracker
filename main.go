@@ -41,6 +41,7 @@ func main() {
 	server.HandleFunc("POST /login", iz.Bind(api.LoginUserHandler))
 	server.HandleFunc("POST /logout", iz.Bind(api.LogoutUserHandler))
 	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))
+	server.HandleFunc("POST /category", iz.Bind(api.SaveCategoryHandler))
 	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler))
 	server.HandleFunc("GET /total", iz.Bind(api.GetTotals))
 	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler))

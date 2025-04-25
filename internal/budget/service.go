@@ -23,9 +23,11 @@ var (
 )
 
 const (
-	limitPerTransaction = 99999999
-	maxLenForCategory   = 255
-	maxLenForCurrency   = 30
+	limitPerTransaction   = 99999999
+	maxLenForCategory     = 255
+	maxLenForCurrency     = 30
+	maxLenForCategoryName = 255
+	maxAmountLimit        = 999999999999999999.99
 )
 
 type BudgetTracker struct {
@@ -44,6 +46,7 @@ func NewBudgetTracker(s Storage) BudgetTracker {
 type Storage interface {
 	SaveUser(newUser auth.User) error
 	SaveSession(session auth.Session) error
+	SaveCategory(category Category) error
 	CheckSession(token string) (userId string, err error)
 	UpdateSession(userId string, expireAt time.Time) error
 	GetSessionByToken(token string) (auth.Session, error)
@@ -213,6 +216,52 @@ func (bt *BudgetTracker) SaveTransaction(createdBy string, amount float64, limit
 		return fmt.Errorf("failed to save transaction to db: %w", err)
 	}
 	return nil
+}
+
+func (bt *BudgetTracker) SaveCategory(userId string, name string, cType string, maxAmount float64, periodDays int) error {
+	if maxAmount > maxAmountLimit {
+		return fmt.Errorf("%w: max amount is too large; the limit is: %.2f", ErrInvalidInput, maxAmountLimit)
+	}
+	if len(name) > maxLenForCategoryName {
+		return fmt.Errorf("%w: name is too long for category; the limit is: %d", ErrInvalidInput, maxLenForCategoryName)
+	}
+
+	var category Category
+	cTypeLower := strings.ToLower(cType)
+	if cTypeLower != "+" && cTypeLower != "-" {
+		return fmt.Errorf("%w: allowed categories types are: income(+), expense(-).", ErrInvalidInput)
+	}
+	if cTypeLower == "-" {
+		now := time.Now()
+		category = Category{
+			ID:          uuid.New().String(),
+			Name:        name,
+			Type:        cTypeLower,
+			CreatedDate: now,
+			UpdatedDate: now,
+			MaxAmount:   maxAmount,
+			PeriodDays:  periodDays,
+			CreatedBy:   userId,
+		}
+	} else {
+		now := time.Now()
+		category = Category{
+			ID:          uuid.New().String(),
+			Name:        name,
+			Type:        cTypeLower,
+			CreatedDate: now,
+			UpdatedDate: now,
+			MaxAmount:   0,
+			PeriodDays:  0,
+			CreatedBy:   userId,
+		}
+	}
+
+	if err := bt.storage.SaveCategory(category); err != nil {
+		return fmt.Errorf("failed to save category to db: %w", err)
+	}
+	return nil
+
 }
 
 func (bt *BudgetTracker) GetFilteredTransactions(userId string, filters *ListTransactionsFilters) ([]Transaction, error) {

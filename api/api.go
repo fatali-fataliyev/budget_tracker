@@ -80,6 +80,36 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(201).Text(msg)
 }
 
+func (api *Api) SaveCategoryHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	var newCategory NewCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&newCategory); err != nil {
+		logging.Logger.Errorf("Failed to parse save category request: %v", err)
+		msg := fmt.Sprintf("failed to parse save category request:")
+		return iz.Respond().Status(500).Text(msg)
+	}
+	defer r.Body.Close()
+
+	if err := api.Service.SaveCategory(userId, newCategory.Name, newCategory.Type, newCategory.MaxAmount, newCategory.PeriodDays); err != nil {
+		msg := fmt.Sprintf("failed to save category: %s", err.Error())
+		return iz.Respond().Status(500).Text(msg)
+	}
+
+	msg := fmt.Sprintf("category saved successfully.")
+	return iz.Respond().Status(500).Text(msg)
+}
+
 func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
