@@ -6,6 +6,15 @@ import (
 	"time"
 )
 
+type Category struct {
+	ID          string
+	Name        string
+	CreatedDate time.Time
+	UpdatedDate time.Time
+	MaxAmount   float64
+	CreatedBy   string
+}
+
 type Transaction struct {
 	ID           string
 	Amount       float64
