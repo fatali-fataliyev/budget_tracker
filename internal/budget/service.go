@@ -50,11 +50,12 @@ type Storage interface {
 	SaveTransaction(t Transaction) error
 	GetFilteredTransactions(userID string, filters *ListTransactionsFilters) ([]Transaction, error)
 	GetTransactionById(userID string, transacationID string) (Transaction, error)
-	GetTotalsByTypeAndCurrency(userId string, filters GetTotals) (GetTotals, error)
+	GetTotals(userId string, filters GetTotals) (GetTotals, error)
 	ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error)
 	IsUserExists(username string) (bool, error)
 	IsEmailConfirmed(emailAddress string) bool
 	UpdateTransaction(userID string, transacationItem UpdateTransactionItem) error
+	ChangeAmountOfTransaction(userId string, tId string, tType string, amount float64) error
 	DeleteTransaction(userID string, transacationID string) error
 	LogoutUser(userId string, token string) error
 	GetStorageType() string
@@ -165,12 +166,12 @@ func (bt *BudgetTracker) RegisterUser(newUser auth.NewUser) (string, error) {
 
 	token, err := bt.GenerateSession(credentials)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate session: %w", err)
+		return "", fmt.Errorf("failed to generate session: %w | please login", err)
 	}
 	return token, nil
 }
 
-func (bt *BudgetTracker) SaveTransaction(createdBy string, amount float64, category string, transcationType string, currency string) error {
+func (bt *BudgetTracker) SaveTransaction(createdBy string, amount float64, limit float64, category string, transcationType string, currency string) error {
 	if amount < 0 {
 		return fmt.Errorf("%w: amount must be positive", ErrInvalidInput)
 	}
@@ -179,6 +180,11 @@ func (bt *BudgetTracker) SaveTransaction(createdBy string, amount float64, categ
 	}
 	if amount > limitPerTransaction {
 		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%2.f", ErrInvalidInput, limitPerTransaction, amount)
+	}
+	if limit != 0 {
+		if amount >= limit {
+			return fmt.Errorf("limit must be greater than amount")
+		}
 	}
 	if strings.TrimSpace(transcationType) != "+" && strings.TrimSpace(transcationType) != "-" {
 		return fmt.Errorf("%w: allowed transaction types are: income(+) and expense(-)", ErrInvalidInput)
@@ -194,6 +200,7 @@ func (bt *BudgetTracker) SaveTransaction(createdBy string, amount float64, categ
 	t := Transaction{
 		ID:          uuid.New().String(),
 		Amount:      amount,
+		Limit:       limit,
 		Currency:    strings.ToLower(currency),
 		Category:    strings.ToLower(category),
 		UpdatedDate: now,
@@ -216,8 +223,8 @@ func (bt *BudgetTracker) GetFilteredTransactions(userId string, filters *ListTra
 	return ts, nil
 }
 
-func (bt *BudgetTracker) GetTotalsByTypeAndCurrency(userId string, filters GetTotals) (GetTotals, error) {
-	result, err := bt.storage.GetTotalsByTypeAndCurrency(userId, filters)
+func (bt *BudgetTracker) GetTotals(userId string, filters GetTotals) (GetTotals, error) {
+	result, err := bt.storage.GetTotals(userId, filters)
 	if err != nil {
 		return GetTotals{}, fmt.Errorf("failed to get totals: %w", err)
 	}
@@ -242,6 +249,9 @@ func (bt *BudgetTracker) UpdateTransaction(userId string, updateTItem UpdateTran
 	if updateTItem.Amount > limitPerTransaction {
 		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%2.f", ErrInvalidInput, limitPerTransaction, updateTItem.Amount)
 	}
+	if updateTItem.Amount >= updateTItem.Limit {
+		return fmt.Errorf("limit must be greater than amount")
+	}
 	if updateTItem.Type != "+" && updateTItem.Type != "-" {
 		return fmt.Errorf("%w: allowed transaction types are: income(+) and expense(-)", ErrInvalidInput)
 	}
@@ -260,6 +270,32 @@ func (bt *BudgetTracker) UpdateTransaction(userId string, updateTItem UpdateTran
 	}
 	if err := bt.storage.UpdateTransaction(userId, updateTItem); err != nil {
 		return fmt.Errorf("failed to update transaction, Transaction-ID: %s, error: %w", updateTItem.ID, err)
+	}
+	return nil
+}
+
+func (bt *BudgetTracker) ChangeAmountOfTransaction(userId string, tId string, tType string, amount float64) error {
+	t, err := bt.storage.GetTransactionById(userId, tId)
+	if err != nil {
+		return fmt.Errorf("failed to change amount of transaction: %w", err)
+	}
+
+	if tType == "expense" {
+		tType = "-"
+	} else if tType == "income" {
+		tType = "+"
+	} else {
+		return fmt.Errorf("%w: invalid transaction type", ErrInvalidInput)
+	}
+	if amount > limitPerTransaction {
+		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%2.f", ErrInvalidInput, limitPerTransaction, amount)
+	}
+	if amount > t.Limit {
+		return fmt.Errorf("%w: amount cannot be greater than the limit, limit for this transaction is: %2.f", ErrInvalidInput, t.Limit)
+	}
+	err = bt.storage.ChangeAmountOfTransaction(userId, tId, tType, amount)
+	if err != nil {
+		return fmt.Errorf("failed to change amount of transaction: %w", err)
 	}
 	return nil
 }
