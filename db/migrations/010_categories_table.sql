@@ -6,6 +6,6 @@ CREATE TABLE categories (
     max_amount decimal(20, 2),
     created_by varchar(36),
     CONSTRAINT pk_categories PRIMARY KEY(id),
-    CONSTRAINT uq_categories_name UNIQUE(name),
+    CONSTRAINT uq_categories_name UNIQUE(name, created_by),
     CONSTRAINT fk_categories_created_by_users_id FOREIGN KEY(created_by) REFERENCES users(id)
 );

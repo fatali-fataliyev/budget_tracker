@@ -1,4 +1,0 @@
-time="2025-04-22T20:52:30+04:00" level=info msg="Application started"
-time="2025-04-22T20:52:30+04:00" level=info msg="Initializing database..."
-time="2025-04-22T20:52:30+04:00" level=info msg="Connected to database"
-time="2025-04-22T20:52:30+04:00" level=debug msg="New mysql storage created"
