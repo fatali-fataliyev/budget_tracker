@@ -40,6 +40,21 @@ type UpdateTransactionItem struct {
 	Type        string
 }
 
+type ListTransactionsFilters struct {
+	Categories []string
+	Type       *string
+	MinAmount  *float64
+	MaxAmount  *float64
+	IsAllNil   bool
+}
+
+type CategoriesListFilters struct {
+	Type string
+	Date time.Time
+	Min  float64
+	Max  float64
+}
+
 type GetTotals struct {
 	Type     string
 	Currency string
@@ -74,12 +89,4 @@ func (list *GetTotals) GetTotalValidate(params url.Values) (*GetTotals, error) {
 	filters.Currency = currency
 
 	return &filters, nil
-}
-
-type ListTransactionsFilters struct {
-	Categories []string
-	Type       *string
-	MinAmount  *float64
-	MaxAmount  *float64
-	IsAllNil   bool
 }

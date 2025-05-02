@@ -64,8 +64,8 @@ func (mySql *MySQLStorage) SaveSession(session auth.Session) error {
 	return nil
 }
 func (mySql *MySQLStorage) SaveCategory(category budget.Category) error {
-	query := "INSERT INTO categories (id, name, created_at, updated_at, max_amount, created_by) VALUES (?, ?, ?, ?, ?, ?);"
-	_, err := mySql.db.Exec(query, category.ID, category.Name, category.CreatedDate, category.UpdatedDate, category.MaxAmount, category.CreatedBy)
+	query := "INSERT INTO categories (id, name, type, created_at, updated_at, max_amount, max_amount_period_days, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
+	_, err := mySql.db.Exec(query, category.ID, category.Name, category.Type, category.CreatedDate, category.UpdatedDate, category.MaxAmount, category.PeriodDays, category.CreatedBy)
 	if err != nil {
 		return fmt.Errorf("failed to save category: %w", err)
 	}

@@ -229,7 +229,7 @@ func (bt *BudgetTracker) SaveCategory(userId string, name string, cType string, 
 	var category Category
 	cTypeLower := strings.ToLower(cType)
 	if cTypeLower != "+" && cTypeLower != "-" {
-		return fmt.Errorf("%w: allowed categories types are: income(+), expense(-).", ErrInvalidInput)
+		return fmt.Errorf("%w: allowed category types are: income(+), expense(-).", ErrInvalidInput)
 	}
 	if cTypeLower == "-" {
 		now := time.Now()

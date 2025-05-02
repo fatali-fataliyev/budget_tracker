@@ -172,3 +172,58 @@ func ListValidateParams(params url.Values) (*budget.ListTransactionsFilters, err
 	filters.Categories = categories
 	return &filters, nil
 }
+
+func CategoriesListValidateParams(params url.Values) (*budget.CategoriesListFilters, error) {
+	filters := budget.CategoriesListFilters{}
+	// categoryType := params.Get("type")
+	// date := params.Get("date")
+	// minAmount := params.Get("min")
+	// maxAmount := params.Get("max")
+
+	// var maxAmountFloat *float64
+	// var minAmountFloat *float64
+
+	// if minAmount != "" {
+	// 	parsedMinAmount, err := strconv.ParseFloat(minAmount, 64)
+	// 	if err == nil {
+	// 		minAmountFloat = &parsedMinAmount
+	// 	}
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("invalid minimum amount")
+	// 	}
+	// } else {
+	// 	minAmountFloat = nil
+	// }
+	// if maxAmount != "" {
+	// 	parsedMaxAmount, err := strconv.ParseFloat(maxAmount, 64)
+	// 	if err == nil {
+	// 		maxAmountFloat = &parsedMaxAmount
+	// 	}
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("invalid maximum amount")
+	// 	}
+	// } else {
+	// 	minAmountFloat = nil
+	// }
+	// if categoryType != "" {
+	// 	if categoryType != "-" && categoryType != "+" {
+	// 		return nil, fmt.Errorf("invalid transaction type")
+	// 	}
+	// }
+	// if date != "" {
+	// 	layout := "2006-01-02" // The layout must match your date string format
+	// 	dateString := "2025-04-26"
+
+	// 	t, err := time.Parse(layout, dateString)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("Error parsing time:", err)
+	// 	}
+
+	// 	// date = t
+	// }
+
+	// filters.Type = categoryType
+	// // filters.Date = date
+
+	return &filters, nil
+}
