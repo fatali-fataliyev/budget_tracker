@@ -11,6 +11,7 @@ import (
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
+	"github.com/go-sql-driver/mysql"
 	"github.com/subosito/gotenv"
 )
 
@@ -67,6 +68,11 @@ func (mySql *MySQLStorage) SaveCategory(category budget.Category) error {
 	query := "INSERT INTO categories (id, name, type, created_at, updated_at, max_amount, max_amount_period_days, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
 	_, err := mySql.db.Exec(query, category.ID, category.Name, category.Type, category.CreatedDate, category.UpdatedDate, category.MaxAmount, category.PeriodDays, category.CreatedBy)
 	if err != nil {
+		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
+			if mysqlErr.Number == 1062 {
+				return fmt.Errorf("%w: this category already exist", budget.ErrConflict)
+			}
+		}
 		return fmt.Errorf("failed to save category: %w", err)
 	}
 	return nil

@@ -48,11 +48,16 @@ type ListTransactionsFilters struct {
 	IsAllNil   bool
 }
 
+// myUrl.com/category?type=income&period=7&names=food,fun&limit=500&startDate=20/09/2004&endDate=30/10/2020
+//https://myUrl.com/category?type=income&period=7&names=food%2Cfun&max=500&startDate=20%2F09%2F2004&endDate=30%2F10%2F2020
+
 type CategoriesListFilters struct {
-	Type string
-	Date time.Time
-	Min  float64
-	Max  float64
+	Type        string
+	PeriodDays  int
+	Names       []string
+	LimitAmount float64
+	StartDate   time.Time
+	EndDate     time.Time
 }
 
 type GetTotals struct {

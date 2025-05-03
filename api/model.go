@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 )
@@ -108,7 +109,7 @@ func httpStatusFromError(err error) int {
 }
 
 func ListValidateParams(params url.Values) (*budget.ListTransactionsFilters, error) {
-	filters := budget.ListTransactionsFilters{}
+	var filters budget.ListTransactionsFilters
 	if len(params) == 0 {
 		filters.IsAllNil = true
 		return &filters, nil
@@ -174,56 +175,53 @@ func ListValidateParams(params url.Values) (*budget.ListTransactionsFilters, err
 }
 
 func CategoriesListValidateParams(params url.Values) (*budget.CategoriesListFilters, error) {
-	filters := budget.CategoriesListFilters{}
-	// categoryType := params.Get("type")
-	// date := params.Get("date")
-	// minAmount := params.Get("min")
-	// maxAmount := params.Get("max")
+	var filters budget.CategoriesListFilters
+	categoryType := strings.ToLower(params.Get("type"))
+	if categoryType != "income" && categoryType != "expense" {
+		return nil, fmt.Errorf("%w: invalid category type: %s", budget.ErrInvalidInput, categoryType)
+	} else {
+		if categoryType == "income" {
+			filters.Type = "+"
+		} else {
+			categoryType = "-"
+		}
+	}
 
-	// var maxAmountFloat *float64
-	// var minAmountFloat *float64
+	if periodStr := params.Get("period"); periodStr != "" {
+		if periodInt, err := strconv.Atoi(periodStr); err == nil {
+			filters.PeriodDays = periodInt
+		} else {
+			return nil, fmt.Errorf("failed to convert string periods days to integer: %w", err)
+		}
+	}
 
-	// if minAmount != "" {
-	// 	parsedMinAmount, err := strconv.ParseFloat(minAmount, 64)
-	// 	if err == nil {
-	// 		minAmountFloat = &parsedMinAmount
-	// 	}
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf("invalid minimum amount")
-	// 	}
-	// } else {
-	// 	minAmountFloat = nil
-	// }
-	// if maxAmount != "" {
-	// 	parsedMaxAmount, err := strconv.ParseFloat(maxAmount, 64)
-	// 	if err == nil {
-	// 		maxAmountFloat = &parsedMaxAmount
-	// 	}
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf("invalid maximum amount")
-	// 	}
-	// } else {
-	// 	minAmountFloat = nil
-	// }
-	// if categoryType != "" {
-	// 	if categoryType != "-" && categoryType != "+" {
-	// 		return nil, fmt.Errorf("invalid transaction type")
-	// 	}
-	// }
-	// if date != "" {
-	// 	layout := "2006-01-02" // The layout must match your date string format
-	// 	dateString := "2025-04-26"
+	if namesStr := params.Get("names"); namesStr != "" {
+		filters.Names = strings.Split(namesStr, ",")
+	}
 
-	// 	t, err := time.Parse(layout, dateString)
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf("Error parsing time:", err)
-	// 	}
+	if limitStr := params.Get("limit"); limitStr != "" {
+		if limitInt, err := strconv.Atoi(limitStr); err == nil {
+			filters.LimitAmount = float64(limitInt)
+		} else {
+			return nil, fmt.Errorf("failed to convert string category limit to integer: %w", err)
+		}
+	}
 
-	// 	// date = t
-	// }
-
-	// filters.Type = categoryType
-	// // filters.Date = date
+	layout := "2006/02/01" // il ay gun
+	if start := params.Get("startDate"); start != "" {
+		if date, err := time.Parse(layout, start); err == nil {
+			filters.StartDate = date
+		} else {
+			return nil, fmt.Errorf("failed to convert start date: %w", err)
+		}
+	}
+	if end := params.Get("endDate"); end != "" {
+		if date, err := time.Parse(layout, end); err == nil {
+			filters.EndDate = date
+		} else {
+			return nil, fmt.Errorf("failed to convert end date: %w", err)
+		}
+	}
 
 	return &filters, nil
 }

@@ -153,10 +153,6 @@ func (api *Api) GetFilteredCategoriesHandler(r *iz.Request) iz.Responder {
 		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
 		return iz.Respond().Status(401).Text(msg)
 	}
-	// by type
-	// by date
-	// maximum
-	// minimum
 
 	userId, err := api.Service.CheckSession(token)
 	if err != nil {
