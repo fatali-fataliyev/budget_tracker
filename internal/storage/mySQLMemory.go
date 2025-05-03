@@ -17,7 +17,7 @@ import (
 func Init() (*sql.DB, error) {
 	err := gotenv.Load()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load env variables for database: %w", err)
+		return nil, fmt.Errorf("failed to load 'env' variables for database: %w", err)
 	}
 	username := os.Getenv("DBUSER")
 	password := os.Getenv("DBPASS")
