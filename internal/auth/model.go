@@ -4,59 +4,55 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
 )
 
 const (
-	maxLenForFullName = 255
-	maxLenForEmail    = 255
+	MAX_LENGTH_FULLNAME = 255
+	MAX_LENGTH_USERNAME = 255
+	MAX_LENGTH_EMAIL    = 255
 )
 
 type User struct {
 	ID             string
 	UserName       string
 	FullName       string
-	NickName       string
-	Email          string
 	PasswordHashed string
+	Email          string
 	PendingEmail   string
 }
 
 type NewUser struct {
 	UserName      string
 	FullName      string
-	NickName      string
-	Email         string
 	PasswordPlain string
-	PendingEmail  string
+	Email         string
 }
 
-func (newUser NewUser) Validate() error {
+func (newUser NewUser) ValidateUserFields() error {
 	usernameRegex := regexp.MustCompile(`^[a-z0-9_]{1,30}$`)
 	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9](\.?[a-zA-Z0-9_%+-])*@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$`)
 	if newUser.UserName == "" {
-		return fmt.Errorf("username is empty")
+		return fmt.Errorf("%w: username is empty", appErrors.ErrInvalidInput)
 	}
 	if !usernameRegex.MatchString(newUser.UserName) {
-		return fmt.Errorf("invalid username format")
+		return fmt.Errorf("%w: this '%s' username is invalid, example valid username: john_doe", appErrors.ErrInvalidInput, newUser.UserName)
 	}
-
-	if newUser.FullName == "" {
-		return fmt.Errorf("full name is required")
-	}
-	if len(newUser.FullName) > 255 {
-		return fmt.Errorf("fullname so long, maximum length: %d", maxLenForFullName)
+	if len(newUser.FullName) > MAX_LENGTH_FULLNAME {
+		return fmt.Errorf("%w: fullname so long, maximum length: %d", appErrors.ErrInvalidInput, MAX_LENGTH_FULLNAME)
 	}
 	if newUser.Email == "" {
-		return fmt.Errorf("email is required")
+		return fmt.Errorf("%w: email is required", appErrors.ErrInvalidInput)
 	}
 	if !emailRegex.MatchString(newUser.Email) {
-		return fmt.Errorf("invalid email format")
+		return fmt.Errorf("%w: invalid email format, example valid email: john.doe@gmail.com", appErrors.ErrInvalidInput)
 	}
-	if len(newUser.Email) > 255 {
-		return fmt.Errorf("your email address so long, maximum length: %d", maxLenForEmail)
+	if len(newUser.Email) > MAX_LENGTH_EMAIL {
+		return fmt.Errorf("%w: your email address so long, maximum length: %d", appErrors.ErrInvalidInput, MAX_LENGTH_EMAIL)
 	}
 	if newUser.PasswordPlain == "" {
-		return fmt.Errorf("password is required")
+		return fmt.Errorf("%w: password is required", appErrors.ErrInvalidInput)
 	}
 	return nil
 }

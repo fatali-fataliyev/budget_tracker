@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
+
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 )
 
@@ -20,12 +22,11 @@ type CreateTransactionRequest struct {
 	Currency string  `json:"currency"`
 }
 
-type CreateUserRequest struct {
+type SaveUserRequest struct {
 	UserName string `json:"username"`
 	FullName string `json:"fullname"`
-	NickName string `json:"nickname"`
-	Email    string `json:"email"`
 	Password string `json:"password"`
+	Email    string `json:"email"`
 }
 
 type UserLoginRequest struct {
@@ -38,14 +39,6 @@ type UpdateTransactionRequest struct {
 	Limit    float64 `json:"limit"`
 	Category string  `json:"category"`
 	Currency string  `json:"currency"`
-}
-
-type NewUserRequest struct {
-	UserName string `json:"username"`
-	FullName string `json:"fullname"`
-	NickName string `json:"nickname"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
 }
 
 type NewCategoryRequest struct {
@@ -64,7 +57,7 @@ type UserCreatedResponse struct {
 	Token   string `json:"token"`
 }
 
-type AuthenticationResponse struct {
+type LoginResponse struct {
 	Message string `json:"message"`
 	Token   string `json:"token"`
 }
@@ -109,15 +102,15 @@ type GetTotalsResponse struct {
 
 func httpStatusFromError(err error) int {
 	switch {
-	case errors.Is(err, budget.ErrNotFound):
+	case errors.Is(err, appErrors.ErrNotFound):
 		return 404 // not found
-	case errors.Is(err, budget.ErrInvalidInput):
+	case errors.Is(err, appErrors.ErrInvalidInput):
 		return 400 // bad request
-	case errors.Is(err, budget.ErrAuth):
+	case errors.Is(err, appErrors.ErrAuth):
 		return 401 // unauthorized
-	case errors.Is(err, budget.ErrAccessDenied):
+	case errors.Is(err, appErrors.ErrAccessDenied):
 		return 403 // access denied
-	case errors.Is(err, budget.ErrConflict):
+	case errors.Is(err, appErrors.ErrConflict):
 		return 409 // conflict
 	default:
 		return 500 //internal error
@@ -228,7 +221,7 @@ func CategoriesListValidateParams(params url.Values) (*budget.CategoriesListFilt
 
 	categoryType := strings.ToLower(params.Get("type"))
 	if categoryType != "income" && categoryType != "expense" {
-		return nil, fmt.Errorf("%w: invalid category type: %s", budget.ErrInvalidInput, categoryType)
+		return nil, fmt.Errorf("%w: invalid category type: %s", appErrors.ErrInvalidInput, categoryType)
 	} else {
 		if categoryType == "income" {
 			filters.Type = "+"
