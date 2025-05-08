@@ -81,8 +81,24 @@ type TransactionItem struct {
 	CreatedBy    string  `json:"created_by"`
 }
 
+type CategoryItem struct {
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Type         string  `json:"type"`
+	CreatedDate  string  `json:"created_at"`
+	UpdatedDate  string  `json:"updated_at"`
+	MaxAmount    float64 `json:"limit"`
+	PeriodDays   int     `json:"period_days"`
+	UsagePercent int     `json:"usage_percent"`
+	CreatedBy    string  `json:"string"`
+}
+
 type ListTransactionResponse struct {
 	Transactions []TransactionItem `json:"transactions"`
+}
+
+type ListCategoriesResponse struct {
+	Categories []CategoryItem `json:"categories"`
 }
 
 type GetTotalsResponse struct {
@@ -105,6 +121,35 @@ func httpStatusFromError(err error) int {
 		return 409 // conflict
 	default:
 		return 500 //internal error
+	}
+}
+
+func TransactionToHttp(transcation budget.Transaction) TransactionItem {
+	return TransactionItem{
+		ID:           transcation.ID,
+		Amount:       transcation.Amount,
+		Limit:        transcation.Limit,
+		UsagePercent: transcation.UsagePercent,
+		Currency:     transcation.Currency,
+		Category:     transcation.Category,
+		CreatedAt:    transcation.CreatedDate.Format("02/01/2006 15:04"),
+		UpdatedAt:    transcation.UpdatedDate.Format("02/01/2006 15:04"),
+		Type:         transcation.Type,
+		CreatedBy:    transcation.CreatedBy,
+	}
+}
+
+func CategoryToHttp(category budget.Category) CategoryItem {
+	return CategoryItem{
+		ID:           category.ID,
+		Name:         category.Name,
+		Type:         category.Type,
+		CreatedDate:  category.CreatedDate.Format("02/01/2006 15:04"),
+		UpdatedDate:  category.UpdatedDate.Format("02/01/2006 15:04"),
+		MaxAmount:    category.MaxAmount,
+		PeriodDays:   category.PeriodDays,
+		UsagePercent: category.UsagePercent,
+		CreatedBy:    category.CreatedBy,
 	}
 }
 
@@ -176,6 +221,11 @@ func ListValidateParams(params url.Values) (*budget.ListTransactionsFilters, err
 
 func CategoriesListValidateParams(params url.Values) (*budget.CategoriesListFilters, error) {
 	var filters budget.CategoriesListFilters
+	if len(params) == 0 {
+		filters.IsAllNil = true
+		return &filters, nil
+	}
+
 	categoryType := strings.ToLower(params.Get("type"))
 	if categoryType != "income" && categoryType != "expense" {
 		return nil, fmt.Errorf("%w: invalid category type: %s", budget.ErrInvalidInput, categoryType)
@@ -207,7 +257,7 @@ func CategoriesListValidateParams(params url.Values) (*budget.CategoriesListFilt
 		}
 	}
 
-	layout := "2006/02/01" // il ay gun
+	layout := "2006-01-02" // il ay gun
 	if start := params.Get("startDate"); start != "" {
 		if date, err := time.Parse(layout, start); err == nil {
 			filters.StartDate = date

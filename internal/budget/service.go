@@ -51,6 +51,7 @@ type Storage interface {
 	GetSessionByToken(token string) (auth.Session, error)
 	SaveTransaction(t Transaction) error
 	GetFilteredTransactions(userID string, filters *ListTransactionsFilters) ([]Transaction, error)
+	GetFilteredCategories(userID string, filters *CategoriesListFilters) ([]Category, error)
 	GetTransactionById(userID string, transacationID string) (Transaction, error)
 	GetTotals(userId string, filters GetTotals) (GetTotals, error)
 	ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error)
@@ -254,6 +255,14 @@ func (bt *BudgetTracker) GetFilteredTransactions(userId string, filters *ListTra
 		return nil, fmt.Errorf("failed to get transactions: %w", err)
 	}
 	return ts, nil
+}
+
+func (bt *BudgetTracker) GetFilteredCategories(userID string, filters *CategoriesListFilters) ([]Category, error) {
+	categories, err := bt.storage.GetFilteredCategories(userID, filters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get categories: %w", err)
+	}
+	return categories, nil
 }
 
 func (bt *BudgetTracker) GetTotals(userId string, filters GetTotals) (GetTotals, error) {

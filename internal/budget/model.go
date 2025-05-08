@@ -7,14 +7,15 @@ import (
 )
 
 type Category struct {
-	ID          string
-	Name        string
-	Type        string
-	CreatedDate time.Time
-	UpdatedDate time.Time
-	MaxAmount   float64
-	PeriodDays  int
-	CreatedBy   string
+	ID           string
+	Name         string
+	Type         string
+	CreatedDate  time.Time
+	UpdatedDate  time.Time
+	MaxAmount    float64
+	PeriodDays   int
+	UsagePercent int
+	CreatedBy    string
 }
 
 type Transaction struct {
@@ -58,6 +59,7 @@ type CategoriesListFilters struct {
 	LimitAmount float64
 	StartDate   time.Time
 	EndDate     time.Time
+	IsAllNil    bool
 }
 
 type GetTotals struct {
