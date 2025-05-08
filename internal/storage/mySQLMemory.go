@@ -111,9 +111,9 @@ func (mySql *MySQLStorage) GetSessionByToken(token string) (auth.Session, error)
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return auth.Session{}, fmt.Errorf("%w: user id not found", appErrors.ErrNotFound)
+			return auth.Session{}, fmt.Errorf("%w: session not found", appErrors.ErrNotFound)
 		}
-		return auth.Session{}, fmt.Errorf("%w: invalid token: %w", appErrors.ErrInvalidInput, err)
+		return auth.Session{}, fmt.Errorf("failed to scan session row: %w", err)
 	}
 
 	createdAt, err := time.Parse("2006-01-02 15:04:05", dSession.CreatedAt)
@@ -145,7 +145,7 @@ func (mySql *MySQLStorage) CheckSession(token string) (string, error) {
 	err := mySql.db.QueryRow(query, token).Scan(&userID, &expireAtString)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("%w: session not found, login again", appErrors.ErrInvalidInput)
+			return "", fmt.Errorf("%w: session not found", appErrors.ErrNotFound)
 		}
 		return "", fmt.Errorf("failed to check session: %w", err)
 	}

@@ -404,8 +404,7 @@ func (api *Api) LogoutUserHandler(r *iz.Request) iz.Responder {
 	}
 
 	if err := api.Service.LogoutUser(userId, token); err != nil {
-		logging.Logger.Errorf("Logout failed: %v", err)
-		msg := fmt.Sprintf("logout failed")
+		msg := fmt.Sprintf("logout failed: %w", err)
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 	msg := "Logout successful."

@@ -95,7 +95,7 @@ func (bt *BudgetTracker) GenerateSession(credentialsPure auth.UserCredentialsPur
 func (bt *BudgetTracker) CheckSession(token string) (string, error) {
 	session, err := bt.storage.GetSessionByToken(token)
 	if err != nil {
-		return "", fmt.Errorf("failed to get session: %w", err)
+		return "", fmt.Errorf("%w", err)
 	}
 
 	userId, err := bt.storage.CheckSession(token)
