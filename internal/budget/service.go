@@ -68,7 +68,7 @@ func (bt *BudgetTracker) ValidateUser(credentials auth.UserCredentialsPure) (aut
 func (bt *BudgetTracker) GenerateSession(credentialsPure auth.UserCredentialsPure) (string, error) {
 	user, err := bt.storage.ValidateUser(credentialsPure)
 	if err != nil {
-		return "", fmt.Errorf("failed to login: %w", err)
+		return "", fmt.Errorf("%w", err)
 	}
 
 	tokenByte := make([]byte, 16)
@@ -153,16 +153,16 @@ func (bt *BudgetTracker) SaveUser(newUser auth.NewUser) (string, error) {
 	if err := bt.storage.SaveUser(user); err != nil {
 		return "", fmt.Errorf("failed to save user: %w", err)
 	}
-	token := "test_token"
-	// credentials := auth.UserCredentialsPure{
-	// 	UserName:      newUser.UserName,
-	// 	PasswordPlain: newUser.PasswordPlain,
-	// }
 
-	// token, err := bt.GenerateSession(credentials)
-	// if err != nil {
-	// 	return "", fmt.Errorf("failed to generate session: %w | please login", err)
-	// }
+	credentials := auth.UserCredentialsPure{
+		UserName:      newUser.UserName,
+		PasswordPlain: newUser.PasswordPlain,
+	}
+
+	token, err := bt.GenerateSession(credentials)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate session: %w | please login", err)
+	}
 	return token, nil
 }
 

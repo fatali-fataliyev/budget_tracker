@@ -356,7 +356,7 @@ func (mySql *MySQLStorage) GetTransactionById(userID string, transactionId strin
 }
 
 func (mySql *MySQLStorage) ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error) {
-	query := "SELECT id, username, fullname, nickname, hashed_password, email FROM users WHERE username = ?;"
+	query := "SELECT id, username, fullname, hashed_password, email FROM users WHERE username = ?;"
 	row := mySql.db.QueryRow(query, credentials.UserName)
 
 	var user auth.User

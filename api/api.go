@@ -373,15 +373,12 @@ func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
 		return iz.Respond().Status(400).Text(msg)
 	}
 
-	logging.Logger.Debugf("username: %s", loginRequest.UserName)
-	logging.Logger.Debugf("password: %s", loginRequest.Password)
-
 	credentials := auth.UserCredentialsPure{
 		UserName:      loginRequest.UserName,
 		PasswordPlain: loginRequest.Password,
 	}
 
-	response := AuthenticationResponse{}
+	response := LoginResponse{}
 
 	token, err := api.Service.GenerateSession(credentials)
 	if err != nil {
