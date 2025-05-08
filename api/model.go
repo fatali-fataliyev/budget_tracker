@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 )
@@ -45,6 +46,13 @@ type NewUserRequest struct {
 	NickName string `json:"nickname"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type NewCategoryRequest struct {
+	Name       string  `json:"name"`
+	Type       string  `json:"type"`
+	MaxAmount  float64 `json:"max_amount"`
+	PeriodDays int     `json:"period_days"`
 }
 
 //REQUESTS END:
@@ -101,7 +109,7 @@ func httpStatusFromError(err error) int {
 }
 
 func ListValidateParams(params url.Values) (*budget.ListTransactionsFilters, error) {
-	filters := budget.ListTransactionsFilters{}
+	var filters budget.ListTransactionsFilters
 	if len(params) == 0 {
 		filters.IsAllNil = true
 		return &filters, nil
@@ -163,5 +171,57 @@ func ListValidateParams(params url.Values) (*budget.ListTransactionsFilters, err
 	filters.MinAmount = minAmountFloat
 	filters.MaxAmount = maxAmountFloat
 	filters.Categories = categories
+	return &filters, nil
+}
+
+func CategoriesListValidateParams(params url.Values) (*budget.CategoriesListFilters, error) {
+	var filters budget.CategoriesListFilters
+	categoryType := strings.ToLower(params.Get("type"))
+	if categoryType != "income" && categoryType != "expense" {
+		return nil, fmt.Errorf("%w: invalid category type: %s", budget.ErrInvalidInput, categoryType)
+	} else {
+		if categoryType == "income" {
+			filters.Type = "+"
+		} else {
+			categoryType = "-"
+		}
+	}
+
+	if periodStr := params.Get("period"); periodStr != "" {
+		if periodInt, err := strconv.Atoi(periodStr); err == nil {
+			filters.PeriodDays = periodInt
+		} else {
+			return nil, fmt.Errorf("failed to convert string periods days to integer: %w", err)
+		}
+	}
+
+	if namesStr := params.Get("names"); namesStr != "" {
+		filters.Names = strings.Split(namesStr, ",")
+	}
+
+	if limitStr := params.Get("limit"); limitStr != "" {
+		if limitInt, err := strconv.Atoi(limitStr); err == nil {
+			filters.LimitAmount = float64(limitInt)
+		} else {
+			return nil, fmt.Errorf("failed to convert string category limit to integer: %w", err)
+		}
+	}
+
+	layout := "2006/02/01" // il ay gun
+	if start := params.Get("startDate"); start != "" {
+		if date, err := time.Parse(layout, start); err == nil {
+			filters.StartDate = date
+		} else {
+			return nil, fmt.Errorf("failed to convert start date: %w", err)
+		}
+	}
+	if end := params.Get("endDate"); end != "" {
+		if date, err := time.Parse(layout, end); err == nil {
+			filters.EndDate = date
+		} else {
+			return nil, fmt.Errorf("failed to convert end date: %w", err)
+		}
+	}
+
 	return &filters, nil
 }

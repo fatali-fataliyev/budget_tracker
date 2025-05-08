@@ -6,6 +6,17 @@ import (
 	"time"
 )
 
+type Category struct {
+	ID          string
+	Name        string
+	Type        string
+	CreatedDate time.Time
+	UpdatedDate time.Time
+	MaxAmount   float64
+	PeriodDays  int
+	CreatedBy   string
+}
+
 type Transaction struct {
 	ID           string
 	Amount       float64
@@ -27,6 +38,26 @@ type UpdateTransactionItem struct {
 	Category    string
 	UpdatedDate time.Time
 	Type        string
+}
+
+type ListTransactionsFilters struct {
+	Categories []string
+	Type       *string
+	MinAmount  *float64
+	MaxAmount  *float64
+	IsAllNil   bool
+}
+
+// myUrl.com/category?type=income&period=7&names=food,fun&limit=500&startDate=20/09/2004&endDate=30/10/2020
+//https://myUrl.com/category?type=income&period=7&names=food%2Cfun&max=500&startDate=20%2F09%2F2004&endDate=30%2F10%2F2020
+
+type CategoriesListFilters struct {
+	Type        string
+	PeriodDays  int
+	Names       []string
+	LimitAmount float64
+	StartDate   time.Time
+	EndDate     time.Time
 }
 
 type GetTotals struct {
@@ -63,12 +94,4 @@ func (list *GetTotals) GetTotalValidate(params url.Values) (*GetTotals, error) {
 	filters.Currency = currency
 
 	return &filters, nil
-}
-
-type ListTransactionsFilters struct {
-	Categories []string
-	Type       *string
-	MinAmount  *float64
-	MaxAmount  *float64
-	IsAllNil   bool
 }

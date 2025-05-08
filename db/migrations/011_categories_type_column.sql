@@ -1,0 +1,4 @@
+ALTER TABLE
+    categories
+ADD
+    COLUMN type VARCHAR(255) NOT NULL;
