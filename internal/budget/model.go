@@ -19,26 +19,13 @@ type Category struct {
 }
 
 type Transaction struct {
-	ID           string
-	Amount       float64
-	Limit        float64
-	UsagePercent int
-	Currency     string
-	Category     string
-	CreatedDate  time.Time
-	UpdatedDate  time.Time
-	Type         string
-	CreatedBy    string
-}
-
-type UpdateTransactionItem struct {
-	ID          string
-	Amount      float64
-	Limit       float64
-	Currency    string
-	Category    string
-	UpdatedDate time.Time
-	Type        string
+	ID         string
+	Category   string
+	Amount     float64
+	AmountType string
+	CreatedAt  time.Time
+	Note       string
+	CreatedBy  string
 }
 
 type ListTransactionsFilters struct {
