@@ -23,23 +23,26 @@ func NewApi(service *budget.BudgetTracker) *Api {
 }
 
 func (api *Api) SaveUserHandler(r *iz.Request) iz.Responder {
-	var newUser auth.NewUser
-	if err := json.NewDecoder(r.Body).Decode(&newUser); err != nil {
+	var newUserReq SaveUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&newUserReq); err != nil {
 		msg := fmt.Sprintf("invalid request body: %s", err.Error())
 		return iz.Respond().Status(400).Text(msg)
 	}
 
-	err := newUser.Validate()
-	if err != nil {
-		msg := fmt.Sprintf("invalid request body: %s", err.Error())
-		return iz.Respond().Status(400).Text(msg)
+	newUser := auth.NewUser{
+		UserName:      newUserReq.UserName,
+		FullName:      newUserReq.FullName,
+		PasswordPlain: newUserReq.Password,
+		Email:         newUserReq.Email,
 	}
 
-	defer r.Body.Close()
-	token, err := api.Service.RegisterUser(newUser)
+	if err := newUser.ValidateUserFields(); err != nil {
+		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
+	}
+
+	token, err := api.Service.SaveUser(newUser)
 	if err != nil {
-		logging.Logger.Errorf("Registration failed: %v", err)
-		msg := fmt.Sprintf("registration failed")
+		msg := fmt.Sprintf("registration failed: %v", err)
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 

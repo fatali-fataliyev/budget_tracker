@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
@@ -48,8 +49,8 @@ func NewMySQLStorage(db *sql.DB) *MySQLStorage {
 }
 
 func (mySql *MySQLStorage) SaveUser(user auth.User) error {
-	query := "INSERT INTO users (id, username, fullname, nickname, hashed_password, email, pending_email) VALUES (?, ?, ?, ?, ?, ?, ?);"
-	_, err := mySql.db.Exec(query, user.ID, user.UserName, user.FullName, user.NickName, user.PasswordHashed, user.Email, user.Email)
+	query := "INSERT INTO users (id, username, fullname, hashed_password, email, pending_email) VALUES (?, ?, ?, ?, ?, ?);"
+	_, err := mySql.db.Exec(query, user.ID, user.UserName, user.FullName, user.PasswordHashed, user.Email, user.Email)
 	if err != nil {
 		return fmt.Errorf("failed to register user: %w", err)
 	}
@@ -70,7 +71,7 @@ func (mySql *MySQLStorage) SaveCategory(category budget.Category) error {
 	if err != nil {
 		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
 			if mysqlErr.Number == 1062 {
-				return fmt.Errorf("%w: this category already exist", budget.ErrConflict)
+				return fmt.Errorf("%w: this category already exist", appErrors.ErrConflict)
 			}
 		}
 		return fmt.Errorf("failed to save category: %w", err)
@@ -92,7 +93,7 @@ func (mySql *MySQLStorage) UpdateSession(user_id string, expireDate time.Time) e
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("%w: session not found", budget.ErrNotFound)
+		return fmt.Errorf("%w: session not found", appErrors.ErrNotFound)
 	}
 	return nil
 }
@@ -110,9 +111,9 @@ func (mySql *MySQLStorage) GetSessionByToken(token string) (auth.Session, error)
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return auth.Session{}, fmt.Errorf("%w: user id not found", budget.ErrNotFound)
+			return auth.Session{}, fmt.Errorf("%w: user id not found", appErrors.ErrNotFound)
 		}
-		return auth.Session{}, fmt.Errorf("%w: invalid token: %w", budget.ErrInvalidInput, err)
+		return auth.Session{}, fmt.Errorf("%w: invalid token: %w", appErrors.ErrInvalidInput, err)
 	}
 
 	createdAt, err := time.Parse("2006-01-02 15:04:05", dSession.CreatedAt)
@@ -144,7 +145,7 @@ func (mySql *MySQLStorage) CheckSession(token string) (string, error) {
 	err := mySql.db.QueryRow(query, token).Scan(&userID, &expireAtString)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("%w: session not found, login again", budget.ErrInvalidInput)
+			return "", fmt.Errorf("%w: session not found, login again", appErrors.ErrInvalidInput)
 		}
 		return "", fmt.Errorf("failed to check session: %w", err)
 	}
@@ -156,7 +157,7 @@ func (mySql *MySQLStorage) CheckSession(token string) (string, error) {
 	now := time.Now()
 
 	if expireAt.Before(now) {
-		return "", fmt.Errorf("%w: session expired, please login again", budget.ErrAuth)
+		return "", fmt.Errorf("%w: session expired, please login again", appErrors.ErrAuth)
 	}
 	return userID, nil
 }
@@ -320,7 +321,7 @@ func (mySql *MySQLStorage) GetTransactionById(userID string, transactionId strin
 	err := row.Scan(&t.ID, &t.Amount, &t.Limit, &t.Currency, &t.Category, &t.CreatedDate, &t.UpdatedDate, &t.Type, &t.CreatedBy)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return budget.Transaction{}, fmt.Errorf("%w: transaction not found", budget.ErrNotFound)
+			return budget.Transaction{}, fmt.Errorf("%w: transaction not found", appErrors.ErrNotFound)
 		}
 		return budget.Transaction{}, fmt.Errorf("failed to scan transaction: %w", err)
 	}
@@ -359,15 +360,15 @@ func (mySql *MySQLStorage) ValidateUser(credentials auth.UserCredentialsPure) (a
 	row := mySql.db.QueryRow(query, credentials.UserName)
 
 	var user auth.User
-	err := row.Scan(&user.ID, &user.UserName, &user.FullName, &user.NickName, &user.PasswordHashed, &user.Email)
+	err := row.Scan(&user.ID, &user.UserName, &user.FullName, &user.PasswordHashed, &user.Email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return auth.User{}, fmt.Errorf("%w: user not found, register please", budget.ErrNotFound)
+			return auth.User{}, fmt.Errorf("%w: user not found, register please", appErrors.ErrNotFound)
 		}
 		return auth.User{}, fmt.Errorf("failed to scan user: %w", err)
 	}
 	if auth.ComparePasswords(user.PasswordHashed, credentials.PasswordPlain) != true {
-		return auth.User{}, fmt.Errorf("%w: password is wrong", budget.ErrInvalidInput)
+		return auth.User{}, fmt.Errorf("%w: password is wrong", appErrors.ErrInvalidInput)
 	}
 	return user, nil
 }
@@ -384,7 +385,7 @@ func (mySql *MySQLStorage) DeleteTransaction(userID string, transactionId string
 		return fmt.Errorf("failed to check: delete status: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("%w: transaction not found", budget.ErrNotFound)
+		return fmt.Errorf("%w: transaction not found", appErrors.ErrNotFound)
 	}
 	return nil
 }
@@ -400,7 +401,7 @@ func (mySql *MySQLStorage) UpdateTransaction(userID string, t budget.UpdateTrans
 		return fmt.Errorf("failed to check: update status: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("%w: transaction not found", budget.ErrNotFound)
+		return fmt.Errorf("%w: transaction not found", appErrors.ErrNotFound)
 	}
 	return nil
 }

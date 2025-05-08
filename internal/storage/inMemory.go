@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
 	authModel "github.com/fatali-fataliyev/budget_tracker/internal/auth"
 	budgetModel "github.com/fatali-fataliyev/budget_tracker/internal/budget"
 )
@@ -34,7 +33,7 @@ func (inMem *InMemeoryStorage) ValidateUser(credentials authModel.UserCredential
 
 	for _, user := range inMem.users {
 		if user.UserName == credentials.UserName {
-			if auth.ComparePasswords(user.PasswordHashed, credentials.PasswordPlain) {
+			if authModel.ComparePasswords(user.PasswordHashed, credentials.PasswordPlain) {
 				return user, nil
 			} else {
 				return authModel.User{}, fmt.Errorf("password is wrong")
@@ -162,7 +161,7 @@ func (inMem *InMemeoryStorage) DeleteTransaction(userId string, transacationID s
 func (inMem *InMemeoryStorage) FindUserByUserName(username string) (string, error) {
 	for _, user := range inMem.users {
 		if user.UserName == username {
-			about := fmt.Sprintf("fullname: %s, nickname: %s, username: %s", user.FullName, user.NickName, user.UserName)
+			about := fmt.Sprintf("fullname: %s, nickname: %s, username: %s", user.FullName, user.UserName)
 			return about, nil
 		}
 	}
