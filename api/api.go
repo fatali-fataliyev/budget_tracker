@@ -137,12 +137,13 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 		msg := fmt.Sprintf("failed to get transactions")
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
+	var tsContainer ListTransactionResponse
 
 	tsForHttp := make([]TransactionItem, 0, len(ts))
 
 	for _, t := range ts {
 		tForHttp := TransactionToHttp(t)
-		tsForHttp = append(tsForHttp, tForHttp)
+		tsContainer.Transactions = append(tsContainer.Transactions, tForHttp)
 	}
 	return iz.Respond().Status(200).JSON(tsForHttp)
 }
@@ -162,26 +163,27 @@ func (api *Api) GetFilteredCategoriesHandler(r *iz.Request) iz.Responder {
 
 	params := r.URL.Query()
 
-	filters, err := ListValidateParams(params)
+	filters, err := CategoriesListValidateParams(params)
 	if err != nil {
 		msg := fmt.Sprintf("invalid filter parameteres: %s", err.Error())
 		return iz.Respond().Status(400).Text(msg)
 	}
 
-	ts, err := api.Service.GetFilteredTransactions(userId, filters)
+	categories, err := api.Service.GetFilteredCategories(userId, filters)
 	if err != nil {
-		logging.Logger.Errorf("Failed to get filtered transactions request: %v", err)
-		msg := fmt.Sprintf("failed to get transactions")
+		logging.Logger.Errorf("Failed to get filtered categories: %v", err)
+		msg := fmt.Sprintf("failed to get filtered categories: %v", err.Error())
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 
-	tsForHttp := make([]TransactionItem, 0, len(ts))
+	categoriesForHttp := make([]CategoryItem, 0, len(categories))
 
-	for _, t := range ts {
-		tForHttp := TransactionToHttp(t)
-		tsForHttp = append(tsForHttp, tForHttp)
+	for _, category := range categories {
+		categoryForHttp := CategoryToHttp(category)
+		categoriesForHttp = append(categoriesForHttp, categoryForHttp)
 	}
-	return iz.Respond().Status(200).JSON(tsForHttp)
+	fmt.Println(filters)
+	return iz.Respond().Status(200).JSON(categoriesForHttp)
 }
 
 func (api *Api) GetTotals(r *iz.Request) iz.Responder {
@@ -408,19 +410,4 @@ func (api *Api) LogoutUserHandler(r *iz.Request) iz.Responder {
 	}
 	msg := "Logout successful."
 	return iz.Respond().Status(200).Text(msg)
-}
-
-func TransactionToHttp(transcation budget.Transaction) TransactionItem {
-	return TransactionItem{
-		ID:           transcation.ID,
-		Amount:       transcation.Amount,
-		Limit:        transcation.Limit,
-		UsagePercent: transcation.UsagePercent,
-		Currency:     transcation.Currency,
-		Category:     transcation.Category,
-		CreatedAt:    transcation.CreatedDate.Format("02/01/2006 15:04"),
-		UpdatedAt:    transcation.UpdatedDate.Format("02/01/2006 15:04"),
-		Type:         transcation.Type,
-		CreatedBy:    transcation.CreatedBy,
-	}
 }

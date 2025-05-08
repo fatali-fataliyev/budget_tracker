@@ -184,6 +184,12 @@ func NilToNullString(v *string) sql.NullString {
 	return sql.NullString{Valid: true, String: *v}
 }
 
+func (mySql *MySQLStorage) GetFilteredCategories(userID string, filters *budget.CategoriesListFilters) ([]budget.Category, error) {
+	return nil, nil
+	// TODO: implement the function
+
+}
+
 func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budget.ListTransactionsFilters) ([]budget.Transaction, error) {
 	var query string
 	args := []interface{}{
