@@ -19,6 +19,8 @@ const (
 	MAX_TRANSACTION_CURRENCY_LENGTH      = 255
 	MAX_TRANSACTION_NOTE_LENGTH          = 1000
 	MAX_TRANSACTION_CATEGORY_NAME_LENGTH = 255
+	MAX_CATEGORY_AMOUNT_LIMIT            = 999999999999999999.99
+	MAX_CATEGORY_NAME_LENGTH             = 255
 )
 
 type BudgetTracker struct {
@@ -212,33 +214,29 @@ func (bt *BudgetTracker) SaveTransaction(userId string, transaction TransactionR
 	return nil
 }
 
-func (bt *BudgetTracker) SaveCategory(userId string, name string, cType string, maxAmount float64, periodDays int) error {
-	// if maxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
-	// 	return fmt.Errorf("%w: max amount is too large; the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
-	// }
-	// if len(name) > MAX_CATEGORY_NAME_LENGTH {
-	// 	return fmt.Errorf("%w: name is too long for category; the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
-	// }
-
-	var category Category
-	cTypeLower := strings.ToLower(cType)
-	if cTypeLower != "+" && cTypeLower != "-" {
-		return fmt.Errorf("%w: allowed category types are: income(+), expense(-).", appErrors.ErrInvalidInput)
+func (bt *BudgetTracker) SaveExpenseCategory(userId string, category CategoryRequest) error {
+	if category.MaxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
+		return fmt.Errorf("%w: category max amount is too large; the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
 	}
-	now := time.Now()
-	category = Category{
-		ID:          uuid.New().String(),
-		Name:        name,
-		Type:        cTypeLower,
-		CreatedDate: now,
-		UpdatedDate: now,
-		MaxAmount:   maxAmount,
-		PeriodDays:  periodDays,
-		CreatedBy:   userId,
+	if len(category.Name) > MAX_CATEGORY_NAME_LENGTH {
+		return fmt.Errorf("%w: category name is too long for category; the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
 	}
 
-	if err := bt.storage.SaveCategory(category); err != nil {
-		return fmt.Errorf("failed to save category to db: %w", err)
+	now := time.Now().UTC()
+	categoryItem := Category{
+		ID:        uuid.New().String(),
+		Name:      category.Name,
+		MaxAmount: category.MaxAmount,
+		PeriodDay: category.PeriodDay,
+		CreatedAt: now,
+		UpdatedAt: now,
+		Note:      category.Note,
+		CreatedBy: userId,
+		Type:      category.Type,
+	}
+
+	if err := bt.storage.SaveCategory(categoryItem); err != nil {
+		return err
 	}
 	return nil
 }
