@@ -21,6 +21,7 @@ const (
 	MAX_TRANSACTION_CATEGORY_NAME_LENGTH = 255
 	MAX_CATEGORY_AMOUNT_LIMIT            = 999999999999999999.99
 	MAX_CATEGORY_NAME_LENGTH             = 255
+	MAX_TARGET_AMOUNT_LIMIT              = 999999999999999999
 )
 
 type BudgetTracker struct {
@@ -38,13 +39,14 @@ func NewBudgetTracker(s Storage) BudgetTracker {
 type Storage interface {
 	SaveUser(newUser auth.User) error
 	SaveSession(session auth.Session) error
-	SaveCategory(category Category) error
+	SaveExpenseCategory(category ExpenseCategory) error
+	SaveIncomeCategory(category IncomeCategory) error
 	CheckSession(token string) (userId string, err error)
 	UpdateSession(userId string, expireAt time.Time) error
 	GetSessionByToken(token string) (auth.Session, error)
 	SaveTransaction(t Transaction) error
 	GetFilteredTransactions(userID string, filters *ListTransactionsFilters) ([]Transaction, error)
-	GetFilteredCategories(userID string, filters *CategoriesListFilters) ([]Category, error)
+	GetFilteredCategories(userID string, filters *CategoriesListFilters) ([]ExpenseCategory, error)
 	GetTransactionById(userID string, transacationID string) (Transaction, error)
 	GetTotals(userId string, filters GetTotals) (GetTotals, error)
 	ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error)
@@ -214,7 +216,7 @@ func (bt *BudgetTracker) SaveTransaction(userId string, transaction TransactionR
 	return nil
 }
 
-func (bt *BudgetTracker) SaveExpenseCategory(userId string, category CategoryRequest) error {
+func (bt *BudgetTracker) SaveExpenseCategory(userId string, category ExpenseCategoryRequest) error {
 	if category.MaxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
 		return fmt.Errorf("%w: category max amount is too large; the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
 	}
@@ -223,7 +225,7 @@ func (bt *BudgetTracker) SaveExpenseCategory(userId string, category CategoryReq
 	}
 
 	now := time.Now().UTC()
-	categoryItem := Category{
+	categoryItem := ExpenseCategory{
 		ID:        uuid.New().String(),
 		Name:      category.Name,
 		MaxAmount: category.MaxAmount,
@@ -235,7 +237,33 @@ func (bt *BudgetTracker) SaveExpenseCategory(userId string, category CategoryReq
 		Type:      category.Type,
 	}
 
-	if err := bt.storage.SaveCategory(categoryItem); err != nil {
+	if err := bt.storage.SaveExpenseCategory(categoryItem); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (bt *BudgetTracker) SaveIncomeCategory(userId string, category IncomeCategoryRequest) error {
+	if category.TargetAmount > MAX_TARGET_AMOUNT_LIMIT {
+		return fmt.Errorf("%w: category max amount is too large; the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
+	}
+	if len(category.Name) > MAX_CATEGORY_NAME_LENGTH {
+		return fmt.Errorf("%w: category name is too long for category; the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
+	}
+
+	now := time.Now().UTC()
+	categoryItem := IncomeCategory{
+		ID:           uuid.New().String(),
+		Name:         category.Name,
+		TargetAmount: category.TargetAmount,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+		Note:         category.Note,
+		CreatedBy:    userId,
+		Type:         category.Type,
+	}
+
+	if err := bt.storage.SaveIncomeCategory(categoryItem); err != nil {
 		return err
 	}
 	return nil
@@ -249,7 +277,7 @@ func (bt *BudgetTracker) GetFilteredTransactions(userId string, filters *ListTra
 	return ts, nil
 }
 
-func (bt *BudgetTracker) GetFilteredCategories(userID string, filters *CategoriesListFilters) ([]Category, error) {
+func (bt *BudgetTracker) GetFilteredCategories(userID string, filters *CategoriesListFilters) ([]ExpenseCategory, error) {
 	categories, err := bt.storage.GetFilteredCategories(userID, filters)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get categories: %w", err)

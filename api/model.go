@@ -40,6 +40,12 @@ type ExpenseCategoryRequest struct {
 	Note      string  `json:"note"`
 }
 
+type IncomeCategoryRequest struct {
+	Name         string `json:"name"`
+	TargetAmount int    `json:"target_amount"`
+	Note         string `json:"note"`
+}
+
 //REQUESTS END:
 
 //RESPONSES:
@@ -124,7 +130,7 @@ func TransactionToHttp(transcation budget.Transaction) TransactionItem {
 	}
 }
 
-func CategoryToHttp(category budget.Category) CategoryItem {
+func CategoryToHttp(category budget.ExpenseCategory) CategoryItem {
 	return CategoryItem{
 		// ID:           category.ID,
 		// Name:         category.Name,

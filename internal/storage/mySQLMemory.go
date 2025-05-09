@@ -65,13 +65,33 @@ func (mySql *MySQLStorage) SaveSession(session auth.Session) error {
 	}
 	return nil
 }
-func (mySql *MySQLStorage) SaveCategory(category budget.Category) error {
+func (mySql *MySQLStorage) SaveExpenseCategory(category budget.ExpenseCategory) error {
 	if category.Type == "" {
 		return fmt.Errorf("%w: category type is empty", appErrors.ErrInvalidInput)
 	}
 	if category.Type == "-" {
 		query := "INSERT INTO expense_categories (id, name, max_amount, period_day, created_at, updated_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
 		_, err := mySql.db.Exec(query, category.ID, category.Name, category.MaxAmount, category.PeriodDay, category.CreatedAt, category.UpdatedAt, category.Note, category.CreatedBy)
+		if err != nil {
+			if mysqlErr, ok := err.(*mysql.MySQLError); ok {
+				if mysqlErr.Number == 1062 {
+					return fmt.Errorf("%w: this category already exist", appErrors.ErrConflict)
+				}
+			}
+			return fmt.Errorf("failed to save category: %w", err)
+		}
+		return nil
+	}
+	return fmt.Errorf("%w: category type is not valid", appErrors.ErrInvalidInput)
+}
+
+func (mySql *MySQLStorage) SaveIncomeCategory(category budget.IncomeCategory) error {
+	if category.Type == "" {
+		return fmt.Errorf("%w: category type is empty", appErrors.ErrInvalidInput)
+	}
+	if category.Type == "+" {
+		query := "INSERT INTO income_categories (id, name, target_amount, created_at, updated_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?);"
+		_, err := mySql.db.Exec(query, category.ID, category.Name, category.TargetAmount, category.CreatedAt, category.UpdatedAt, category.Note, category.CreatedBy)
 		if err != nil {
 			if mysqlErr, ok := err.(*mysql.MySQLError); ok {
 				if mysqlErr.Number == 1062 {
@@ -191,10 +211,9 @@ func NilToNullString(v *string) sql.NullString {
 	return sql.NullString{Valid: true, String: *v}
 }
 
-func (mySql *MySQLStorage) GetFilteredCategories(userID string, filters *budget.CategoriesListFilters) ([]budget.Category, error) {
-	return nil, nil
+func (mySql *MySQLStorage) GetFilteredCategories(userID string, filters *budget.CategoriesListFilters) ([]budget.ExpenseCategory, error) {
 	// TODO: implement the function
-
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budget.ListTransactionsFilters) ([]budget.Transaction, error) {
