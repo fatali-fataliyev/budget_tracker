@@ -131,7 +131,7 @@ func (api *Api) SaveExpenseCategoryHandler(r *iz.Request) iz.Responder {
 		return iz.Respond().Status(400).Text(msg)
 	}
 
-	newExpCategory := budget.CategoryRequest{
+	newExpCategory := budget.ExpenseCategoryRequest{
 		Name:      newExpCategoryReq.Name,
 		MaxAmount: newExpCategoryReq.MaxAmount,
 		PeriodDay: newExpCategoryReq.PeriodDay,
@@ -148,6 +148,45 @@ func (api *Api) SaveExpenseCategoryHandler(r *iz.Request) iz.Responder {
 
 }
 
+func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	var newIncCategoryReq IncomeCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&newIncCategoryReq); err != nil {
+		msg := fmt.Sprintf("failed to parse save category request: %v", err)
+		return iz.Respond().Status(500).Text(msg)
+	}
+
+	if newIncCategoryReq.Name == "" {
+		msg := fmt.Sprintf("category name is required")
+		return iz.Respond().Status(400).Text(msg)
+	}
+
+	newIncCategory := budget.IncomeCategoryRequest{
+		Name:         newIncCategoryReq.Name,
+		TargetAmount: newIncCategoryReq.TargetAmount,
+		Note:         newIncCategoryReq.Note,
+		Type:         "+",
+	}
+
+	if err := api.Service.SaveIncomeCategory(userId, newIncCategory); err != nil {
+		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
+	}
+
+	msg := fmt.Sprintf("category successfully created")
+	return iz.Respond().Status(201).Text(msg)
+
+}
 func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {

@@ -6,14 +6,21 @@ import (
 	"time"
 )
 
-type CategoryRequest struct {
+type ExpenseCategoryRequest struct {
 	Name      string
 	MaxAmount float64
 	PeriodDay int
 	Note      string
 	Type      string
 }
-type Category struct {
+
+type IncomeCategoryRequest struct {
+	Name         string
+	TargetAmount int
+	Note         string
+	Type         string
+}
+type ExpenseCategory struct {
 	ID        string
 	Name      string
 	MaxAmount float64
@@ -25,7 +32,7 @@ type Category struct {
 	Type      string
 }
 
-type CategoryResponse struct {
+type ExpenseCategoryResponse struct {
 	ID           string
 	Name         string
 	Amount       float64
@@ -36,6 +43,17 @@ type CategoryResponse struct {
 	UpdatedAt    time.Time
 	Note         string
 	CreatedBy    string
+}
+
+type IncomeCategory struct {
+	ID           string
+	Name         string
+	TargetAmount int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Note         string
+	CreatedBy    string
+	Type         string
 }
 
 type TransactionRequest struct {
