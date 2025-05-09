@@ -46,7 +46,6 @@ func main() {
 	server.HandleFunc("GET /category/{name}", iz.Bind(api.GetCategoryByNameHandler))
 	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler))
 	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler))
-	server.HandleFunc("PUT /transaction/{id}", iz.Bind(api.UpdateTransactionHandler))
 	server.HandleFunc("DELETE /transaction/{id}", iz.Bind(api.DeleteTransactionHandler))
 
 	fmt.Println("server is running")

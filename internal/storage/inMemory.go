@@ -84,12 +84,12 @@ func (inMem *InMemeoryStorage) GetAllTransactions(userId string) ([]budgetModel.
 	return result, nil
 }
 func (inMem *InMemeoryStorage) GetTransactionsByType(userId string, transactionType string) ([]budgetModel.Transaction, error) {
-	results := []budgetModel.Transaction{}
-	for _, transaction := range inMem.transactions {
-		if transaction.Type == transactionType && transaction.CreatedBy == userId {
-			results = append(results, transaction)
-		}
-	}
+	// results := []budgetModel.Transaction{}
+	// for _, transaction := range inMem.transactions {
+	// 	// if transaction.Type == transactionType && transaction.CreatedBy == userId {
+	// 	// 	results = append(results, transaction)
+	// 	// }
+	// }
 	return inMem.transactions, nil
 }
 
@@ -115,36 +115,36 @@ func (inMem *InMemeoryStorage) GetTransactionById(userId string, transacationID 
 
 func (inMem *InMemeoryStorage) GetTransactionsByCurrency(userId string, currencyType string) ([]budgetModel.Transaction, error) {
 	results := []budgetModel.Transaction{}
-	for _, transaction := range inMem.transactions {
-		if transaction.Currency == currencyType && transaction.CreatedBy == userId {
-			results = append(results, transaction)
-		}
-	}
+	// for _, transaction := range inMem.transactions {
+	// 	if transaction.Currency == currencyType && transaction.CreatedBy == userId {
+	// 		results = append(results, transaction)
+	// 	}
+	// }
 	return results, nil
 }
 
 func (inMem *InMemeoryStorage) GetTotalsByType(tType string, userId string) (string, error) {
 	var total int
-	for _, transaction := range inMem.transactions {
-		if transaction.Type == tType && transaction.CreatedBy == userId {
-			transaction.Amount += float64(total)
-		}
-	}
+	// for _, transaction := range inMem.transactions {
+	// 	if transaction.Type == tType && transaction.CreatedBy == userId {
+	// 		transaction.Amount += float64(total)
+	// 	}
+	// }
 	result := fmt.Sprintf("total %s(s) is: %f", tType, float64(total))
 	return result, nil
 }
 
-func (inMem *InMemeoryStorage) UpdateTransaction(userId string, transacationItem budgetModel.UpdateTransactionItem) error {
-	for tIdx, t := range inMem.transactions {
-		if t.CreatedBy == userId && t.ID == transacationItem.ID {
-			inMem.transactions[tIdx].Amount = t.Amount
-			inMem.transactions[tIdx].Currency = t.Currency
-			inMem.transactions[tIdx].Category = t.Category
-			inMem.transactions[tIdx].UpdatedDate = t.UpdatedDate
-			inMem.transactions[tIdx].Type = t.Type
-			return nil
-		}
-	}
+func (inMem *InMemeoryStorage) UpdateTransaction(userId string, transacationItem budgetModel.BudgetTracker) error {
+	// for tIdx, t := range inMem.transactions {
+	// if t.CreatedBy == userId && t.ID == transacationItem.ID {
+	// 	inMem.transactions[tIdx].Amount = t.Amount
+	// 	inMem.transactions[tIdx].Currency = t.Currency
+	// 	inMem.transactions[tIdx].Category = t.Category
+	// 	inMem.transactions[tIdx].UpdatedDate = t.UpdatedDate
+	// 	inMem.transactions[tIdx].Type = t.Type
+	// 	return nil
+	// }
+	// }
 	return fmt.Errorf("transaction not found: transaction update failed.")
 }
 
