@@ -66,17 +66,23 @@ func (mySql *MySQLStorage) SaveSession(session auth.Session) error {
 	return nil
 }
 func (mySql *MySQLStorage) SaveCategory(category budget.Category) error {
-	query := "INSERT INTO categories (id, name, type, created_at, updated_at, max_amount, max_amount_period_days, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
-	_, err := mySql.db.Exec(query, category.ID, category.Name, category.Type, category.CreatedDate, category.UpdatedDate, category.MaxAmount, category.PeriodDays, category.CreatedBy)
-	if err != nil {
-		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
-			if mysqlErr.Number == 1062 {
-				return fmt.Errorf("%w: this category already exist", appErrors.ErrConflict)
-			}
-		}
-		return fmt.Errorf("failed to save category: %w", err)
+	if category.Type == "" {
+		return fmt.Errorf("%w: category type is empty", appErrors.ErrInvalidInput)
 	}
-	return nil
+	if category.Type == "-" {
+		query := "INSERT INTO expense_categories (id, name, max_amount, period_day, created_at, updated_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
+		_, err := mySql.db.Exec(query, category.ID, category.Name, category.MaxAmount, category.PeriodDay, category.CreatedAt, category.UpdatedAt, category.Note, category.CreatedBy)
+		if err != nil {
+			if mysqlErr, ok := err.(*mysql.MySQLError); ok {
+				if mysqlErr.Number == 1062 {
+					return fmt.Errorf("%w: this category already exist", appErrors.ErrConflict)
+				}
+			}
+			return fmt.Errorf("failed to save category: %w", err)
+		}
+		return nil
+	}
+	return fmt.Errorf("%w: category type is not valid", appErrors.ErrInvalidInput)
 }
 
 func (mySql *MySQLStorage) UpdateSession(user_id string, expireDate time.Time) error {

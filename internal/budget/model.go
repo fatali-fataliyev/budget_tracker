@@ -6,15 +6,35 @@ import (
 	"time"
 )
 
+type CategoryRequest struct {
+	Name      string
+	MaxAmount float64
+	PeriodDay int
+	Note      string
+	Type      string
+}
 type Category struct {
+	ID        string
+	Name      string
+	MaxAmount float64
+	PeriodDay int
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Note      string
+	CreatedBy string
+	Type      string
+}
+
+type CategoryResponse struct {
 	ID           string
 	Name         string
-	Type         string
-	CreatedDate  time.Time
-	UpdatedDate  time.Time
+	Amount       float64
 	MaxAmount    float64
 	PeriodDays   int
 	UsagePercent int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Note         string
 	CreatedBy    string
 }
 

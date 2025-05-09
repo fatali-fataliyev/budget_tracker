@@ -32,19 +32,12 @@ type UserLoginRequest struct {
 	UserName string `json:"username"`
 	Password string `json:"password"`
 }
-type UpdateTransactionRequest struct {
-	Type     string  `json:"type"`
-	Amount   float64 `json:"amount"`
-	Limit    float64 `json:"limit"`
-	Category string  `json:"category"`
-	Currency string  `json:"currency"`
-}
 
-type NewCategoryRequest struct {
-	Name       string  `json:"name"`
-	Type       string  `json:"type"`
-	MaxAmount  float64 `json:"max_amount"`
-	PeriodDays int     `json:"period_days"`
+type ExpenseCategoryRequest struct {
+	Name      string  `json:"name"`
+	MaxAmount float64 `json:"max_amount"`
+	PeriodDay int     `json:"period_day"`
+	Note      string  `json:"note"`
 }
 
 //REQUESTS END:
@@ -133,15 +126,15 @@ func TransactionToHttp(transcation budget.Transaction) TransactionItem {
 
 func CategoryToHttp(category budget.Category) CategoryItem {
 	return CategoryItem{
-		ID:           category.ID,
-		Name:         category.Name,
-		Type:         category.Type,
-		CreatedDate:  category.CreatedDate.Format("02/01/2006 15:04"),
-		UpdatedDate:  category.UpdatedDate.Format("02/01/2006 15:04"),
-		MaxAmount:    category.MaxAmount,
-		PeriodDays:   category.PeriodDays,
-		UsagePercent: category.UsagePercent,
-		CreatedBy:    category.CreatedBy,
+		// ID:           category.ID,
+		// Name:         category.Name,
+		// Type:         category.Type,
+		// CreatedDate:  category.CreatedDate.Format("02/01/2006 15:04"),
+		// UpdatedDate:  category.UpdatedDate.Format("02/01/2006 15:04"),
+		// MaxAmount:    category.MaxAmount,
+		// PeriodDays:   category.PeriodDays,
+		// UsagePercent: category.UsagePercent,
+		// CreatedBy:    category.CreatedBy,
 	}
 }
 

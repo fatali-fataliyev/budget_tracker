@@ -99,29 +99,52 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(201).Text(msg)
 }
 
-func (api *Api) SaveCategoryHandler(r *iz.Request) iz.Responder {
+func (api *Api) SaveExpenseCategoryHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
 		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
 		return iz.Respond().Status(401).Text(msg)
 	}
 
-	_, err := api.Service.CheckSession(token)
+	userId, err := api.Service.CheckSession(token)
 	if err != nil {
 		msg := fmt.Sprintf("authorization failed: %s", err.Error())
 		return iz.Respond().Status(401).Text(msg)
 	}
 
-	var newCategory NewCategoryRequest
-	if err := json.NewDecoder(r.Body).Decode(&newCategory); err != nil {
-		logging.Logger.Errorf("Failed to parse save category request: %v", err)
-		msg := fmt.Sprintf("failed to parse save category request:")
+	var newExpCategoryReq ExpenseCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&newExpCategoryReq); err != nil {
+		msg := fmt.Sprintf("failed to parse save category request: %v", err)
 		return iz.Respond().Status(500).Text(msg)
 	}
-	defer r.Body.Close()
 
-	msg := fmt.Sprintf("failed to save category: %s", err.Error())
-	return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	if newExpCategoryReq.Name == "" {
+		msg := fmt.Sprintf("category name is required")
+		return iz.Respond().Status(400).Text(msg)
+	}
+	if newExpCategoryReq.MaxAmount <= 0 {
+		msg := fmt.Sprintf("category max amount should be greater than 0")
+		return iz.Respond().Status(400).Text(msg)
+	}
+	if newExpCategoryReq.PeriodDay < 0 {
+		msg := fmt.Sprintf("category period day should be positive")
+		return iz.Respond().Status(400).Text(msg)
+	}
+
+	newExpCategory := budget.CategoryRequest{
+		Name:      newExpCategoryReq.Name,
+		MaxAmount: newExpCategoryReq.MaxAmount,
+		PeriodDay: newExpCategoryReq.PeriodDay,
+		Note:      newExpCategoryReq.Note,
+		Type:      "-",
+	}
+
+	if err := api.Service.SaveExpenseCategory(userId, newExpCategory); err != nil {
+		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
+	}
+
+	msg := fmt.Sprintf("category successfully created")
+	return iz.Respond().Status(201).Text(msg)
 
 }
 
@@ -199,8 +222,7 @@ func (api *Api) GetFilteredCategoriesHandler(r *iz.Request) iz.Responder {
 	// }
 	// fmt.Println(filters)
 
-	// return iz.Respond().Status(200).JSON(categoriesForHttp)
-	return iz.Respond().Status(200).JSON("success")
+	// return iz.Respond().Status(200).JSON(categoriesForHttp
 	// return iz.Respond().Status(200).JSON("success")
 }
 
