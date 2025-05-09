@@ -15,11 +15,10 @@ import (
 
 // REQUESTS START:
 type CreateTransactionRequest struct {
-	Ttype    string  `json:"type"`
-	Amount   float64 `json:"amount"`
-	Limit    float64 `json:"limit"`
-	Category string  `json:"category"`
-	Currency string  `json:"currency"`
+	Category string `json:"category"`
+	Amount   string `json:"amount"` // keep as string to allow "+145.00"
+	Currency string `json:"currency"`
+	Note     string `json:"note"`
 }
 
 type SaveUserRequest struct {
@@ -119,16 +118,16 @@ func httpStatusFromError(err error) int {
 
 func TransactionToHttp(transcation budget.Transaction) TransactionItem {
 	return TransactionItem{
-		ID:           transcation.ID,
-		Amount:       transcation.Amount,
-		Limit:        transcation.Limit,
-		UsagePercent: transcation.UsagePercent,
-		Currency:     transcation.Currency,
-		Category:     transcation.Category,
-		CreatedAt:    transcation.CreatedDate.Format("02/01/2006 15:04"),
-		UpdatedAt:    transcation.UpdatedDate.Format("02/01/2006 15:04"),
-		Type:         transcation.Type,
-		CreatedBy:    transcation.CreatedBy,
+		// ID:           transcation.ID,
+		// Amount:       transcation.Amount,
+		// Limit:        transcation.Limit,
+		// UsagePercent: transcation.UsagePercent,
+		// Currency:     transcation.Currency,
+		// Category:     transcation.Category,
+		// CreatedAt:    transcation.CreatedDate.Format("02/01/2006 15:04"),
+		// UpdatedAt:    transcation.UpdatedDate.Format("02/01/2006 15:04"),
+		// Type:         transcation.Type,
+		// CreatedBy:    transcation.CreatedBy,
 	}
 }
 

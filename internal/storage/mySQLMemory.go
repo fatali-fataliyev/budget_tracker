@@ -163,8 +163,8 @@ func (mySql *MySQLStorage) CheckSession(token string) (string, error) {
 }
 
 func (mySql *MySQLStorage) SaveTransaction(t budget.Transaction) error {
-	query := "INSERT INTO transactions (id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);"
-	_, err := mySql.db.Exec(query, t.ID, t.Amount, t.Limit, t.Currency, t.Category, t.CreatedDate, t.UpdatedDate, t.Type, t.CreatedBy)
+	query := "INSERT INTO transactions (id, category_name, amount, currency, created_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?);"
+	_, err := mySql.db.Exec(query, t.ID, t.Category, t.Amount, t.Currency, t.CreatedAt, t.Note, t.CreatedBy)
 	if err != nil {
 		return fmt.Errorf("failed to save transaction: %w", err)
 	}
@@ -253,11 +253,11 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budge
 			return nil, fmt.Errorf("failed to scan transaction: %w", err)
 		}
 
-		createdDate, err := time.Parse("2006-01-02 15:04:05", t.CreatedDate)
+		_, err = time.Parse("2006-01-02 15:04:05", t.CreatedDate)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse created_date")
 		}
-		updatedDate, err := time.Parse("2006-01-02 15:04:05", t.UpdatedDate)
+		_, err = time.Parse("2006-01-02 15:04:05", t.UpdatedDate)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse updated_date")
 		}
@@ -267,19 +267,8 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budge
 		} else {
 			usagePercent = 0
 		}
-
-		budgetT := budget.Transaction{
-			ID:           t.ID,
-			Amount:       t.Amount,
-			Limit:        t.Limit,
-			UsagePercent: usagePercent,
-			Currency:     t.Currency,
-			Category:     t.Category,
-			CreatedDate:  createdDate,
-			UpdatedDate:  updatedDate,
-			Type:         t.Type,
-			CreatedBy:    t.CreatedBy,
-		}
+		_ = usagePercent
+		budgetT := budget.Transaction{}
 		transactions = append(transactions, budgetT)
 	}
 	return transactions, nil
@@ -326,32 +315,22 @@ func (mySql *MySQLStorage) GetTransactionById(userID string, transactionId strin
 		return budget.Transaction{}, fmt.Errorf("failed to scan transaction: %w", err)
 	}
 
-	createdDate, err := time.Parse("2006-01-02 15:04:05", t.CreatedDate)
+	_, err = time.Parse("2006-01-02 15:04:05", t.CreatedDate)
 	if err != nil {
 		return budget.Transaction{}, fmt.Errorf("failed to parse created_date")
 	}
-	updatedDate, err := time.Parse("2006-01-02 15:04:05", t.UpdatedDate)
+	_, err = time.Parse("2006-01-02 15:04:05", t.UpdatedDate)
 	if err != nil {
 		return budget.Transaction{}, fmt.Errorf("failed to parse updated_date")
 	}
 	var usagePercent int
+	_ = usagePercent
 	if t.Limit != 0 {
 		usagePercent = (int(t.Amount) * 100) / int(t.Limit)
 	} else {
 		usagePercent = 0
 	}
-	budgetT := budget.Transaction{
-		ID:           t.ID,
-		Amount:       t.Amount,
-		Limit:        t.Limit,
-		UsagePercent: usagePercent,
-		Currency:     t.Currency,
-		Category:     t.Category,
-		CreatedDate:  createdDate,
-		UpdatedDate:  updatedDate,
-		Type:         t.Type,
-		CreatedBy:    t.CreatedBy,
-	}
+	budgetT := budget.Transaction{}
 	return budgetT, nil
 }
 
@@ -389,20 +368,20 @@ func (mySql *MySQLStorage) DeleteTransaction(userID string, transactionId string
 	}
 	return nil
 }
-func (mySql *MySQLStorage) UpdateTransaction(userID string, t budget.UpdateTransactionItem) error {
-	query := "UPDATE transactions SET amount = ?, limit_for_amount = ?, currency = ?, category = ?, updated_date = ?, type = ? WHERE created_by = ? AND id = ?;"
-	result, err := mySql.db.Exec(query, t.Amount, t.Limit, t.Currency, t.Category, t.UpdatedDate, t.Type, userID, t.ID)
-	if err != nil {
-		return fmt.Errorf("failed to update transaction: %w", err)
-	}
+func (mySql *MySQLStorage) UpdateTransaction(userID string, t budget.Transaction) error {
+	// query := "UPDATE transactions SET amount = ?, limit_for_amount = ?, currency = ?, category = ?, updated_date = ?, type = ? WHERE created_by = ? AND id = ?;"
+	// result, err := mySql.db.Exec(query, t.Amount, t.Limit, t.Currency, t.Category, t.UpdatedDate, t.Type, userID, t.ID)
+	// if err != nil {
+	// return fmt.Errorf("failed to update transaction: %w", err)
+	// }
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check: update status: %w", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("%w: transaction not found", appErrors.ErrNotFound)
-	}
+	// rowsAffected, err := result.RowsAffected()
+	// if err != nil {
+	// 	return fmt.Errorf("failed to check: update status: %w", err)
+	// }
+	// if rowsAffected == 0 {
+	// 	return fmt.Errorf("%w: transaction not found", appErrors.ErrNotFound)
+	// }
 	return nil
 }
 

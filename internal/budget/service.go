@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math"
 	"strings"
 	"time"
 	"unicode"
@@ -16,11 +15,10 @@ import (
 )
 
 const (
-	MAX_TRANSACTION_AMOUNT_LIMIT = 999999999999999999
-	MAX_CATEGORY_ID_LENGTH       = 255
-	MAX_CURRENCY_LENGTH          = 30
-	MAX_CATEGORY_NAME_LENGTH     = 255
-	MAX_CATEGORY_AMOUNT_LIMIT    = 999999999999999999.99
+	MAX_TRANSACTION_AMOUNT_LIMIT         = 999999999999999999
+	MAX_TRANSACTION_CURRENCY_LENGTH      = 255
+	MAX_TRANSACTION_NOTE_LENGTH          = 1000
+	MAX_TRANSACTION_CATEGORY_NAME_LENGTH = 255
 )
 
 type BudgetTracker struct {
@@ -50,7 +48,6 @@ type Storage interface {
 	ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error)
 	IsUserExists(username string) (bool, error)
 	IsEmailConfirmed(emailAddress string) bool
-	UpdateTransaction(userID string, transacationItem UpdateTransactionItem) error
 	ChangeAmountOfTransaction(userId string, tId string, tType string, amount float64) error
 	DeleteTransaction(userID string, transacationID string) error
 	LogoutUser(userId string, token string) error
@@ -179,42 +176,34 @@ func CapitalizeFullName(name string) string {
 	return strings.Join(words, " ")
 }
 
-func (bt *BudgetTracker) SaveTransaction(createdBy string, amount float64, limit float64, category string, transcationType string, currency string) error {
-	if amount < 0 {
-		return fmt.Errorf("%w: amount must be positive", appErrors.ErrInvalidInput)
+func (bt *BudgetTracker) SaveTransaction(userId string, transaction TransactionRequest) error {
+	if transaction.Amount == 0 {
+		return fmt.Errorf("%w: minimum amount must be 1.", appErrors.ErrInvalidInput)
 	}
-	if math.Abs(amount) < 1e-9 {
-		return fmt.Errorf("%w: zero value amount", appErrors.ErrInvalidInput)
+	if transaction.Amount > MAX_TRANSACTION_AMOUNT_LIMIT {
+		return fmt.Errorf("%w: maximum allowed amount per transaction is: %d", appErrors.ErrInvalidInput, MAX_TRANSACTION_AMOUNT_LIMIT)
 	}
-	if amount > MAX_TRANSACTION_AMOUNT_LIMIT {
-		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%2.f", appErrors.ErrInvalidInput, MAX_TRANSACTION_AMOUNT_LIMIT, amount)
+	if len(transaction.Category) > MAX_TRANSACTION_CATEGORY_NAME_LENGTH {
+		return fmt.Errorf("%w: category name so long.", appErrors.ErrInvalidInput)
 	}
-	if limit != 0 {
-		if amount >= limit {
-			return fmt.Errorf("limit must be greater than amount")
-		}
+	if len(transaction.Currency) > MAX_TRANSACTION_CURRENCY_LENGTH {
+		return fmt.Errorf("%w: currency so long", appErrors.ErrInvalidInput)
 	}
-	if strings.TrimSpace(transcationType) != "+" && strings.TrimSpace(transcationType) != "-" {
-		return fmt.Errorf("%w: allowed transaction types are: income(+) and expense(-)", appErrors.ErrInvalidInput)
-	}
-	if len(category) > MAX_CATEGORY_NAME_LENGTH {
-		return fmt.Errorf("%w: category name too long, maximum length: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
-	}
-	if len(currency) > MAX_CURRENCY_LENGTH {
-		return fmt.Errorf("%w: currency name too long, maximum length: %d", appErrors.ErrInvalidInput, MAX_CURRENCY_LENGTH)
+	if len(transaction.Note) > MAX_TRANSACTION_NOTE_LENGTH {
+		return fmt.Errorf("%w: note so long, maximum allowed length is: %d", appErrors.ErrInvalidInput, MAX_TRANSACTION_NOTE_LENGTH)
+
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
+
 	t := Transaction{
-		ID:          uuid.New().String(),
-		Amount:      amount,
-		Limit:       limit,
-		Currency:    strings.ToLower(currency),
-		Category:    strings.ToLower(category),
-		UpdatedDate: now,
-		CreatedDate: now,
-		Type:        transcationType,
-		CreatedBy:   createdBy,
+		ID:        uuid.New().String(),
+		Category:  transaction.Category,
+		Amount:    transaction.Amount,
+		Currency:  transaction.Currency,
+		CreatedAt: now,
+		Note:      transaction.Note,
+		CreatedBy: userId,
 	}
 
 	if err := bt.storage.SaveTransaction(t); err != nil {
@@ -224,12 +213,12 @@ func (bt *BudgetTracker) SaveTransaction(createdBy string, amount float64, limit
 }
 
 func (bt *BudgetTracker) SaveCategory(userId string, name string, cType string, maxAmount float64, periodDays int) error {
-	if maxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
-		return fmt.Errorf("%w: max amount is too large; the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
-	}
-	if len(name) > MAX_CATEGORY_NAME_LENGTH {
-		return fmt.Errorf("%w: name is too long for category; the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
-	}
+	// if maxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
+	// 	return fmt.Errorf("%w: max amount is too large; the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
+	// }
+	// if len(name) > MAX_CATEGORY_NAME_LENGTH {
+	// 	return fmt.Errorf("%w: name is too long for category; the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
+	// }
 
 	var category Category
 	cTypeLower := strings.ToLower(cType)
@@ -286,43 +275,8 @@ func (bt *BudgetTracker) GetTranscationById(userId string, transactionId string)
 	return t, nil
 }
 
-func (bt *BudgetTracker) UpdateTransaction(userId string, updateTItem UpdateTransactionItem) error {
-	if updateTItem.Amount < 0 {
-		return fmt.Errorf("%w: amount must be positive", appErrors.ErrInvalidInput)
-	}
-	if math.Abs(updateTItem.Amount) < 1e-9 {
-		return fmt.Errorf("%w: zero value amount", appErrors.ErrInvalidInput)
-	}
-	if updateTItem.Amount > MAX_TRANSACTION_AMOUNT_LIMIT {
-		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%2.f", appErrors.ErrInvalidInput, MAX_TRANSACTION_AMOUNT_LIMIT, updateTItem.Amount)
-	}
-	if updateTItem.Amount >= updateTItem.Limit {
-		return fmt.Errorf("limit must be greater than amount")
-	}
-	if updateTItem.Type != "+" && updateTItem.Type != "-" {
-		return fmt.Errorf("%w: allowed transaction types are: income(+) and expense(-)", appErrors.ErrInvalidInput)
-	}
-	if len(updateTItem.Category) > MAX_CATEGORY_NAME_LENGTH {
-		return fmt.Errorf("%w: category name too long, maximum length: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
-	}
-	if len(updateTItem.Currency) > MAX_CURRENCY_LENGTH {
-		return fmt.Errorf("%w: currency name too long, maximum length: %d", appErrors.ErrInvalidInput, MAX_CURRENCY_LENGTH)
-	}
-	tItem, err := bt.storage.GetTransactionById(userId, updateTItem.ID)
-	if err != nil {
-		return fmt.Errorf("failed to get transaction's creator: %w", err)
-	}
-	if userId != tItem.CreatedBy {
-		return fmt.Errorf("%w: you are not allowed to update a transaction you did not create", appErrors.ErrAccessDenied)
-	}
-	if err := bt.storage.UpdateTransaction(userId, updateTItem); err != nil {
-		return fmt.Errorf("failed to update transaction, Transaction-ID: %s, error: %w", updateTItem.ID, err)
-	}
-	return nil
-}
-
 func (bt *BudgetTracker) ChangeAmountOfTransaction(userId string, tId string, tType string, amount float64) error {
-	t, err := bt.storage.GetTransactionById(userId, tId)
+	_, err := bt.storage.GetTransactionById(userId, tId)
 	if err != nil {
 		return fmt.Errorf("failed to change amount of transaction: %w", err)
 	}
@@ -337,8 +291,8 @@ func (bt *BudgetTracker) ChangeAmountOfTransaction(userId string, tId string, tT
 	if amount > MAX_TRANSACTION_AMOUNT_LIMIT {
 		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%2.f", appErrors.ErrInvalidInput, MAX_TRANSACTION_AMOUNT_LIMIT, amount)
 	}
-	if amount > t.Limit {
-		return fmt.Errorf("%w: amount cannot be greater than the limit, limit for this transaction is: %2.f", appErrors.ErrInvalidInput, t.Limit)
+	if amount > 300 {
+		return fmt.Errorf("%w: amount cannot be greater than the limit, limit for this transaction is: %2.f", appErrors.ErrInvalidInput, 300)
 	}
 	err = bt.storage.ChangeAmountOfTransaction(userId, tId, tType, amount)
 	if err != nil {
