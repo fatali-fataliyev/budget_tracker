@@ -81,6 +81,7 @@ type ExpenseCategoryList struct {
 	MaxAmount float64
 	PeriodDay int
 	CreatedAt time.Time
+	EndDate   time.Time
 	IsAllNil  bool
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
@@ -320,58 +321,70 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(userID string, filters *
 		return categories, nil
 	}
 
-	// if filters.Type != "" {
-	// 	query += " AND type = ?"
-	// 	args = append(args, filters.Type)
-	// }
+	if filters.PeriodDay > 0 {
+		query += " AND period_day >= ?"
+		args = append(args, filters.PeriodDay)
+	}
 
-	// if filters.PeriodDays > 0 {
-	// 	query += " AND period_day = ?"
-	// 	args = append(args, filters.PeriodDays)
-	// }
+	if len(filters.Names) > 0 {
+		query += " AND name IN (?" + strings.Repeat(",?", len(filters.Names)-1) + ")"
+		for _, name := range filters.Names {
+			args = append(args, name)
+		}
+	}
 
-	// if len(filters.Names) > 0 {
-	// 	query += " AND name IN (?" + strings.Repeat(",?", len(filters.Names)-1) + ")"
-	// 	for _, name := range filters.Names {
-	// 		args = append(args, name)
-	// 	}
-	// }
+	if filters.MaxAmount > 0 {
+		query += " AND max_amount <= ?"
+		args = append(args, filters.MaxAmount)
+	}
 
-	// if filters.LimitAmount > 0 {
-	// 	query += " AND max_amount <= ?"
-	// 	args = append(args, filters.LimitAmount)
-	// }
+	if !filters.CreatedAt.IsZero() {
+		query += " AND created_at >= ?"
+		args = append(args, filters.CreatedAt)
+	}
 
-	// if !filters.StartDate.IsZero() {
-	// 	query += " AND created_at >= ?"
-	// 	args = append(args, filters.StartDate)
-	// }
+	if !filters.EndDate.IsZero() {
+		query += " AND created_at <= ?"
+		args = append(args, filters.EndDate)
+	}
 
-	// if !filters.EndDate.IsZero() {
-	// 	query += " AND created_at <= ?"
-	// 	args = append(args, filters.EndDate)
-	// }
+	rows, err := mySql.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-	// rows, err := mySql.db.Query(query, args...)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// defer rows.Close()
+	var categories []budget.ExpenseCategoryResponse
+	for rows.Next() {
+		var category budget.ExpenseCategoryResponse
+		var createdAt string
+		var updatedAt string
 
-	// var categories []budget.ExpenseCategoryResponse
-	// for rows.Next() {
-	// 	var cat budget.ExpenseCategoryResponse
-	// 	err := rows.Scan(&cat.ID, &cat.Name, &cat.MaxAmount, &cat.PeriodDay,
-	// 		&cat.CreatedAt, &cat.UpdatedAt, &cat.Note, &cat.CreatedBy, &cat.Type)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	categories = append(categories, cat)
-	// }
-	// if err := rows.Err(); err != nil {
-	// 	return nil, err
-	// }
-	return nil, nil
+		err = rows.Scan(&category.ID, &category.Name, &category.MaxAmount, &category.PeriodDay, &createdAt, &updatedAt, &category.Note, &category.CreatedBy)
+		if err != nil {
+			return nil, err
+		}
+		category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse created_at: %w", err)
+		}
+		category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse updated_at: %w", err)
+		}
+
+		categoryAmount, err := mySql.GetTotalAmountOfTransactions(userID, category.Name, "-")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get total amount of transactions: %w", err)
+		}
+		category.Amount = categoryAmount
+
+		categories = append(categories, category)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return categories, nil
 }
 
 // func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budget.ListTransactionsFilters) ([]budget.Transaction, error) {

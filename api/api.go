@@ -204,8 +204,6 @@ func (api *Api) GetFilteredExpenseCategoriesHandler(r *iz.Request) iz.Responder 
 	if err != nil {
 		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
 	}
-
-	// Convert to HTTP format
 	var categoryList ListExpenseCategories
 	for _, c := range categories {
 		categoryList.Categories = append(categoryList.Categories, ExpenseCategoryToHttp(c))

@@ -145,38 +145,67 @@ func ExpenseCategoryToHttp(category budget.ExpenseCategoryResponse) ExpenseCateg
 		CreatedBy:    category.CreatedBy,
 	}
 }
-
 func ExpenseCategoryCheckParams(params url.Values) (*budget.ExpenseCategoryList, error) {
 	var filters budget.ExpenseCategoryList
+
 	if len(params) == 0 {
 		filters.IsAllNil = true
 		return &filters, nil
 	}
 
+	hasAnyFilter := false
+
 	names := params.Get("names")
-	nameList := strings.Split(names, ",")
+	if names != "" {
+		filters.Names = strings.Split(names, ",")
+		hasAnyFilter = true
+	}
 
 	maxAmountStr := params.Get("max_amount")
-	maxAmount, err := strconv.ParseFloat(maxAmountStr, 64)
-	if err != nil {
-		return nil, fmt.Errorf("%w: invalid max amount: %s", appErrors.ErrInvalidInput, maxAmountStr)
+	if maxAmountStr != "" {
+		maxAmount, err := strconv.ParseFloat(maxAmountStr, 64)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid max amount: %s", appErrors.ErrInvalidInput, maxAmountStr)
+		}
+		filters.MaxAmount = maxAmount
+		hasAnyFilter = true
 	}
 
 	periodDayStr := params.Get("period_day")
-	periodDay, err := strconv.Atoi(periodDayStr)
-	if err != nil {
-		return nil, fmt.Errorf("%w: invalid period day: %s", appErrors.ErrInvalidInput, periodDayStr)
+	if periodDayStr != "" {
+		periodDay, err := strconv.Atoi(periodDayStr)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid period day: %s", appErrors.ErrInvalidInput, periodDayStr)
+		}
+		filters.PeriodDay = periodDay
+		hasAnyFilter = true
 	}
 
 	createdAtStr := params.Get("created_at")
-	createdAt, err := time.Parse("02/01/2006", createdAtStr)
-	if err != nil {
-		return nil, fmt.Errorf("%w: invalid created at date: %s", appErrors.ErrInvalidInput, createdAtStr)
+	if createdAtStr != "" {
+		createdAt, err := time.Parse("02/01/2006", createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid created at date: %s", appErrors.ErrInvalidInput, createdAtStr)
+		}
+		filters.CreatedAt = createdAt.UTC()
+		hasAnyFilter = true
 	}
-	filters.Names = nameList
-	filters.MaxAmount = maxAmount
-	filters.PeriodDay = periodDay
-	filters.CreatedAt = createdAt
+
+	endDateStr := params.Get("end_date")
+	if endDateStr != "" {
+		endDate, err := time.Parse("02/01/2006", endDateStr)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid end date: %s", appErrors.ErrInvalidInput, endDateStr)
+		}
+		filters.EndDate = endDate.UTC()
+		hasAnyFilter = true
+
+		if !filters.CreatedAt.IsZero() && endDate.Before(filters.CreatedAt) {
+			return nil, fmt.Errorf("%w: end date cannot be before created at date", appErrors.ErrInvalidInput)
+		}
+	}
+
+	filters.IsAllNil = !hasAnyFilter
 	return &filters, nil
 }
 
