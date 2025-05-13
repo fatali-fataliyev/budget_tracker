@@ -179,6 +179,41 @@ func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(201).Text(msg)
 
 }
+
+func (api *Api) GetFilteredIncomeCategoriesHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	params := r.URL.Query()
+
+	filter, err := IncomeCategoryCheckParams(params)
+	if err != nil {
+		msg := fmt.Sprintf("invalid filter parameteres: %s", err.Error())
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
+
+	categories, err := api.Service.GetFilteredIncomeCategories(userId, filter)
+	if err != nil {
+		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
+	}
+	var categoryList ListIncomeCategories
+	for _, c := range categories {
+		categoryList.Categories = append(categoryList.Categories, ExpenseCategoryToHttp(c))
+	}
+
+	return iz.Respond().Status(200).JSON(categoryList)
+
+}
+
 func (api *Api) GetFilteredExpenseCategoriesHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
