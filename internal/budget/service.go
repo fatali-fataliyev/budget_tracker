@@ -187,7 +187,7 @@ func (bt *BudgetTracker) SaveTransaction(userId string, transaction TransactionR
 	if transaction.Amount > MAX_TRANSACTION_AMOUNT_LIMIT {
 		return fmt.Errorf("%w: maximum allowed amount per transaction is: %d", appErrors.ErrInvalidInput, MAX_TRANSACTION_AMOUNT_LIMIT)
 	}
-	if len(transaction.Category) > MAX_TRANSACTION_CATEGORY_NAME_LENGTH {
+	if len(transaction.CategoryName) > MAX_TRANSACTION_CATEGORY_NAME_LENGTH {
 		return fmt.Errorf("%w: category name so long.", appErrors.ErrInvalidInput)
 	}
 	if len(transaction.Currency) > MAX_TRANSACTION_CURRENCY_LENGTH {
@@ -199,15 +199,14 @@ func (bt *BudgetTracker) SaveTransaction(userId string, transaction TransactionR
 	}
 
 	now := time.Now().UTC()
-
 	t := Transaction{
-		ID:        uuid.New().String(),
-		Category:  transaction.Category,
-		Amount:    transaction.Amount,
-		Currency:  transaction.Currency,
-		CreatedAt: now,
-		Note:      transaction.Note,
-		CreatedBy: userId,
+		ID:           uuid.New().String(),
+		CategoryName: transaction.CategoryName,
+		Amount:       transaction.Amount,
+		Currency:     transaction.Currency,
+		CreatedAt:    now,
+		Note:         transaction.Note,
+		CreatedBy:    userId,
 	}
 
 	if err := bt.storage.SaveTransaction(t); err != nil {

@@ -58,20 +58,22 @@ type IncomeCategory struct {
 }
 
 type TransactionRequest struct {
-	Category string
-	Amount   float64
-	Currency string
-	Note     string
+	CategoryName string
+	CategoryType string
+	Amount       float64
+	Currency     string
+	Note         string
 }
 
 type Transaction struct {
-	ID        string
-	Category  string
-	Amount    float64
-	Currency  string
-	CreatedAt time.Time
-	Note      string
-	CreatedBy string
+	ID           string
+	CategoryName string
+	CategoryType string
+	Amount       float64
+	Currency     string
+	CreatedAt    time.Time
+	Note         string
+	CreatedBy    string
 }
 
 type ExpenseCategoryList struct {

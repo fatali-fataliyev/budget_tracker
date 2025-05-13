@@ -15,10 +15,10 @@ import (
 
 // REQUESTS START:
 type CreateTransactionRequest struct {
-	Category string `json:"category"`
-	Amount   string `json:"amount"` // keep as string to allow "+145.00"
-	Currency string `json:"currency"`
-	Note     string `json:"note"`
+	CategoryName string  `json:"category_name"`
+	Amount       float64 `json:"amount"`
+	Currency     string  `json:"currency"`
+	Note         string  `json:"note"`
 }
 
 type SaveUserRequest struct {

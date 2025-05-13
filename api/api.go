@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/0xcafe-io/iz"
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
@@ -71,24 +70,17 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 		msg := fmt.Sprintf("failed to parse save transaction request: %v", err)
 		return iz.Respond().Status(500).Text(msg)
 	}
-	amountStr := newTransactionReq.Amount
 
-	if len(amountStr) == 0 || (amountStr[0] != '+' && amountStr[0] != '-') {
-		msg := fmt.Sprintf("invalid transaction amount format: '%s'", amountStr)
-		return iz.Respond().Status(400).Text(msg)
-	}
-
-	amountValue, err := strconv.ParseFloat(amountStr, 64)
 	if err != nil {
 		msg := fmt.Sprintf("failed to convert amount: %v", err)
 		return iz.Respond().Status(400).Text(msg)
 	}
 
 	newTransaction := budget.TransactionRequest{
-		Category: newTransactionReq.Category,
-		Amount:   amountValue,
-		Currency: newTransactionReq.Currency,
-		Note:     newTransactionReq.Note,
+		CategoryName: newTransactionReq.CategoryName,
+		Amount:       newTransactionReq.Amount,
+		Currency:     newTransactionReq.Currency,
+		Note:         newTransactionReq.Note,
 	}
 
 	if err := api.Service.SaveTransaction(userId, newTransaction); err != nil {

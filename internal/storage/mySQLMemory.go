@@ -187,9 +187,46 @@ func (mySql *MySQLStorage) CheckSession(token string) (string, error) {
 	return userID, nil
 }
 
+func (mySql *MySQLStorage) GetCategoryTypeByName(userId string, categoryName string) (string, error) {
+	query := "SELECT id FROM expense_categories WHERE created_by = ? AND name = ?;"
+	row := mySql.db.QueryRow(query, userId, categoryName)
+
+	var categoryType string
+	var id string
+	err := row.Scan(&id)
+	if err == nil {
+		categoryType = "-"
+		return categoryType, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("failed to scan expense category type: %w", err)
+	}
+
+	query = "SELECT id FROM income_categories WHERE created_by = ? AND name = ?;"
+	row = mySql.db.QueryRow(query, userId, categoryName)
+
+	err = row.Scan(&id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
+		}
+		return "", fmt.Errorf("failed to scan income category type: %w", err)
+	}
+	categoryType = "+"
+	return categoryType, nil
+}
+
 func (mySql *MySQLStorage) SaveTransaction(t budget.Transaction) error {
-	query := "INSERT INTO transactions (id, category_name, amount, currency, created_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?);"
-	_, err := mySql.db.Exec(query, t.ID, t.Category, t.Amount, t.Currency, t.CreatedAt, t.Note, t.CreatedBy)
+	query := "INSERT INTO transactions (id, category_name, amount, currency, created_at, note, created_by, category_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
+	categoryType, err := mySql.GetCategoryTypeByName(t.CreatedBy, t.CategoryName)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
+		}
+		return fmt.Errorf("failed to get category type: %w", err)
+	}
+	t.CategoryType = categoryType
+	_, err = mySql.db.Exec(query, t.ID, t.CategoryName, t.Amount, t.Currency, t.CreatedAt, t.Note, t.CreatedBy, t.CategoryType)
 	if err != nil {
 		return fmt.Errorf("failed to save transaction: %w", err)
 	}
@@ -233,7 +270,6 @@ func (mySql *MySQLStorage) GetTotalAmountOfTransactions(userID string, categoryN
 	if err != nil {
 		return 0, err
 	}
-
 	return total, nil
 }
 
@@ -243,20 +279,17 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(userID string, filters *
 
 	if filters.IsAllNil {
 		query += ";"
-
+		fmt.Println("is all nil: ", filters.IsAllNil)
 		rows, err := mySql.db.Query(query, args...)
 		if err != nil {
 			return nil, err
 		}
+
 		defer rows.Close()
 
 		var categories []budget.ExpenseCategoryResponse
 		for rows.Next() {
 			var category budget.ExpenseCategoryResponse
-			categoryAmount, err := mySql.GetTotalAmountOfTransactions(userID, category.Name, "-")
-			if err != nil {
-				return nil, fmt.Errorf("failed to get total amount of transactions: %w", err)
-			}
 			var createdAt string
 			var updatedAt string
 
@@ -264,8 +297,6 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(userID string, filters *
 			if err != nil {
 				return nil, err
 			}
-			category.Amount = categoryAmount
-
 			category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse created_at: %w", err)
@@ -274,6 +305,13 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(userID string, filters *
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse updated_at: %w", err)
 			}
+
+			categoryAmount, err := mySql.GetTotalAmountOfTransactions(userID, category.Name, "-")
+			if err != nil {
+				return nil, fmt.Errorf("failed to get total amount of transactions: %w", err)
+			}
+			category.Amount = categoryAmount
+
 			categories = append(categories, category)
 		}
 		if err := rows.Err(); err != nil {
