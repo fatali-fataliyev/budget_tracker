@@ -92,6 +92,7 @@ type ListExpenseCategories struct {
 type InomeCategoryResponseItem struct {
 	ID           string  `json:"id"`
 	Name         string  `json:"name"`
+	Amount       float64 `json:"amount"`
 	TargetAmount float64 `json:"target_amount"`
 	UsagePercent int     `json:"usage_percent"`
 	CreatedAt    string  `json:"created_at"`
@@ -162,10 +163,12 @@ func ExpenseCategoryToHttp(category budget.ExpenseCategoryResponse) ExpenseCateg
 	}
 }
 
-func IncomeCategoryToHttp(category budget.InomeCategoryResponse) InomeCategoryResponseItem {
+func IncomeCategoryToHttp(category budget.IncomeCategoryResponse) InomeCategoryResponseItem {
+	fmt.Println(category.TargetAmount)
 	return InomeCategoryResponseItem{
 		ID:           category.ID,
 		Name:         category.Name,
+		Amount:       category.Amount,
 		TargetAmount: category.TargetAmount,
 		UsagePercent: category.UsagePercent,
 		CreatedAt:    category.CreatedAt.Format("02/01/2006 15:04"),

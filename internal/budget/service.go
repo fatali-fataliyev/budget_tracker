@@ -47,8 +47,8 @@ type Storage interface {
 	SaveTransaction(t Transaction) error
 	// GetFilteredTransactions(userID string) ([]Transaction, error)
 	GetFilteredExpenseCategories(userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error)
+	GetFilteredIncomeCategories(userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error)
 	GetTransactionById(userID string, transacationID string) (Transaction, error)
-	GetTotals(userId string, filters GetTotals) (GetTotals, error)
 	ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error)
 	IsUserExists(username string) (bool, error)
 	IsEmailConfirmed(emailAddress string) bool
@@ -277,6 +277,37 @@ func (bt *BudgetTracker) GetFilteredTransactions(userId string) ([]Transaction, 
 	return nil, nil
 }
 
+func (bt *BudgetTracker) GetFilteredIncomeCategories(userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error) {
+	categoriesRaw, err := bt.storage.GetFilteredIncomeCategories(userID, filters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get income categories: %w", err)
+	}
+
+	var categories []IncomeCategoryResponse
+
+	for _, category := range categoriesRaw {
+		var usagePercent int
+		if category.TargetAmount > 0 {
+			usagePercent = int((category.Amount / category.TargetAmount) * 100)
+		}
+
+		category := IncomeCategoryResponse{
+			ID:           category.ID,
+			Name:         category.Name,
+			Amount:       category.Amount,
+			TargetAmount: category.TargetAmount,
+			UsagePercent: usagePercent,
+			CreatedAt:    category.CreatedAt,
+			UpdatedAt:    category.UpdatedAt,
+			Note:         category.Note,
+			CreatedBy:    category.CreatedBy,
+		}
+		categories = append(categories, category)
+	}
+
+	return categories, nil
+}
+
 func (bt *BudgetTracker) GetFilteredExpenseCategories(userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error) {
 	categoriesRaw, err := bt.storage.GetFilteredExpenseCategories(userID, filters)
 	if err != nil {
@@ -311,14 +342,6 @@ func (bt *BudgetTracker) GetFilteredExpenseCategories(userID string, filters *Ex
 	}
 
 	return categories, nil
-}
-
-func (bt *BudgetTracker) GetTotals(userId string, filters GetTotals) (GetTotals, error) {
-	result, err := bt.storage.GetTotals(userId, filters)
-	if err != nil {
-		return GetTotals{}, fmt.Errorf("failed to get totals: %w", err)
-	}
-	return result, nil
 }
 
 func (bt *BudgetTracker) GetTranscationById(userId string, transactionId string) (Transaction, error) {

@@ -81,9 +81,10 @@ type ExpenseCategoryResponse struct {
 	CreatedBy    string
 }
 
-type InomeCategoryResponse struct {
+type IncomeCategoryResponse struct {
 	ID           string
 	Name         string
+	Amount       float64
 	TargetAmount float64
 	UsagePercent int
 	CreatedAt    time.Time

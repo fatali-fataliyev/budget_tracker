@@ -207,7 +207,7 @@ func (api *Api) GetFilteredIncomeCategoriesHandler(r *iz.Request) iz.Responder {
 	}
 	var categoryList ListIncomeCategories
 	for _, c := range categories {
-		categoryList.Categories = append(categoryList.Categories, ExpenseCategoryToHttp(c))
+		categoryList.Categories = append(categoryList.Categories, IncomeCategoryToHttp(c))
 	}
 
 	return iz.Respond().Status(200).JSON(categoryList)
