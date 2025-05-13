@@ -194,11 +194,11 @@ func IncomeCategoryCheckParams(params url.Values) (*budget.IncomeCategoryList, e
 		hasAnyFilter = true
 	}
 
-	targetAmount := params.Get("target_amount")
-	if targetAmount != "" {
-		targetAmount, err := strconv.ParseFloat(targetAmount, 64)
+	targetAmountStr := params.Get("target_amount")
+	if targetAmountStr != "" {
+		targetAmount, err := strconv.ParseFloat(targetAmountStr, 64)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid target_amount: %s", appErrors.ErrInvalidInput, targetAmount)
+			return nil, fmt.Errorf("%w: invalid target_amount: %s", appErrors.ErrInvalidInput, targetAmountStr)
 		}
 		filters.TargetAmount = targetAmount
 		hasAnyFilter = true
