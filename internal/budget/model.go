@@ -37,7 +37,8 @@ type ExpenseCategoryResponse struct {
 	Name         string
 	Amount       float64
 	MaxAmount    float64
-	PeriodDays   int
+	PeriodDay    int
+	IsExpired    bool
 	UsagePercent int
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
@@ -73,12 +74,12 @@ type Transaction struct {
 	CreatedBy string
 }
 
-type ListTransactionsFilters struct {
-	Categories []string
-	Type       *string
-	MinAmount  *float64
-	MaxAmount  *float64
-	IsAllNil   bool
+type ExpenseCategoryList struct {
+	Names     []string
+	MaxAmount float64
+	PeriodDay int
+	CreatedAt time.Time
+	IsAllNil  bool
 }
 
 // myUrl.com/category?type=income&period=7&names=food,fun&limit=500&startDate=20/09/2004&endDate=30/10/2020

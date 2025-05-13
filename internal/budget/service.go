@@ -45,8 +45,8 @@ type Storage interface {
 	UpdateSession(userId string, expireAt time.Time) error
 	GetSessionByToken(token string) (auth.Session, error)
 	SaveTransaction(t Transaction) error
-	GetFilteredTransactions(userID string, filters *ListTransactionsFilters) ([]Transaction, error)
-	GetFilteredCategories(userID string, filters *CategoriesListFilters) ([]ExpenseCategory, error)
+	// GetFilteredTransactions(userID string) ([]Transaction, error)
+	GetFilteredExpenseCategories(userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error)
 	GetTransactionById(userID string, transacationID string) (Transaction, error)
 	GetTotals(userId string, filters GetTotals) (GetTotals, error)
 	ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error)
@@ -269,19 +269,48 @@ func (bt *BudgetTracker) SaveIncomeCategory(userId string, category IncomeCatego
 	return nil
 }
 
-func (bt *BudgetTracker) GetFilteredTransactions(userId string, filters *ListTransactionsFilters) ([]Transaction, error) {
-	ts, err := bt.storage.GetFilteredTransactions(userId, filters)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get transactions: %w", err)
-	}
-	return ts, nil
+func (bt *BudgetTracker) GetFilteredTransactions(userId string) ([]Transaction, error) {
+	// ts, err := bt.storage.GetFilteredTransactions(userId)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to get transactions: %w", err)
+	// }
+	// return ts, nil
+	return nil, nil
 }
 
-func (bt *BudgetTracker) GetFilteredCategories(userID string, filters *CategoriesListFilters) ([]ExpenseCategory, error) {
-	categories, err := bt.storage.GetFilteredCategories(userID, filters)
+func (bt *BudgetTracker) GetFilteredExpenseCategories(userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error) {
+	categoriesRaw, err := bt.storage.GetFilteredExpenseCategories(userID, filters)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get categories: %w", err)
+		return nil, fmt.Errorf("failed to get expense categories: %w", err)
 	}
+
+	var categories []ExpenseCategoryResponse
+
+	for _, category := range categoriesRaw {
+		var usagePercent int
+		if category.MaxAmount > 0 {
+			usagePercent = int((category.Amount / category.MaxAmount) * 100)
+		}
+
+		isExpired := time.Now().UTC().After(category.CreatedAt.AddDate(0, 0, category.PeriodDay))
+
+		category := ExpenseCategoryResponse{
+			ID:           category.ID,
+			Name:         category.Name,
+			Amount:       category.Amount,
+			MaxAmount:    category.MaxAmount,
+			PeriodDay:    category.PeriodDay,
+			UsagePercent: usagePercent,
+			CreatedAt:    category.CreatedAt,
+			UpdatedAt:    category.UpdatedAt,
+			Note:         category.Note,
+			CreatedBy:    category.CreatedBy,
+			IsExpired:    isExpired,
+		}
+
+		categories = append(categories, category)
+	}
+
 	return categories, nil
 }
 

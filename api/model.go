@@ -72,24 +72,24 @@ type TransactionItem struct {
 	CreatedBy    string  `json:"created_by"`
 }
 
-type CategoryItem struct {
+type ExpenseCategoryResponseItem struct {
 	ID           string  `json:"id"`
 	Name         string  `json:"name"`
-	Type         string  `json:"type"`
-	CreatedDate  string  `json:"created_at"`
-	UpdatedDate  string  `json:"updated_at"`
-	MaxAmount    float64 `json:"limit"`
-	PeriodDays   int     `json:"period_days"`
+	Amount       float64 `json:"amount"`
+	MaxAmount    float64 `json:"max_amount"`
+	PeriodDay    int     `json:"period_day"`
+	IsExpired    bool    `json:"is_expired"`
 	UsagePercent int     `json:"usage_percent"`
-	CreatedBy    string  `json:"string"`
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
+	Note         string  `json:"note"`
+	CreatedBy    string  `json:"created_by"`
 }
-
+type ListExpenseCategories struct {
+	Categories []ExpenseCategoryResponseItem `json:"categories"`
+}
 type ListTransactionResponse struct {
 	Transactions []TransactionItem `json:"transactions"`
-}
-
-type ListCategoriesResponse struct {
-	Categories []CategoryItem `json:"categories"`
 }
 
 type GetTotalsResponse struct {
@@ -130,139 +130,109 @@ func TransactionToHttp(transcation budget.Transaction) TransactionItem {
 	}
 }
 
-func CategoryToHttp(category budget.ExpenseCategory) CategoryItem {
-	return CategoryItem{
-		// ID:           category.ID,
-		// Name:         category.Name,
-		// Type:         category.Type,
-		// CreatedDate:  category.CreatedDate.Format("02/01/2006 15:04"),
-		// UpdatedDate:  category.UpdatedDate.Format("02/01/2006 15:04"),
-		// MaxAmount:    category.MaxAmount,
-		// PeriodDays:   category.PeriodDays,
-		// UsagePercent: category.UsagePercent,
-		// CreatedBy:    category.CreatedBy,
+func ExpenseCategoryToHttp(category budget.ExpenseCategoryResponse) ExpenseCategoryResponseItem {
+	return ExpenseCategoryResponseItem{
+		ID:           category.ID,
+		Name:         category.Name,
+		Amount:       category.Amount,
+		MaxAmount:    category.MaxAmount,
+		PeriodDay:    category.PeriodDay,
+		IsExpired:    category.IsExpired,
+		UsagePercent: category.UsagePercent,
+		CreatedAt:    category.CreatedAt.Format("02/01/2006 15:04"),
+		UpdatedAt:    category.UpdatedAt.Format("02/01/2006 15:04"),
+		Note:         category.Note,
+		CreatedBy:    category.CreatedBy,
 	}
 }
 
-func ListValidateParams(params url.Values) (*budget.ListTransactionsFilters, error) {
-	var filters budget.ListTransactionsFilters
+func ExpenseCategoryCheckParams(params url.Values) (*budget.ExpenseCategoryList, error) {
+	var filters budget.ExpenseCategoryList
 	if len(params) == 0 {
 		filters.IsAllNil = true
 		return &filters, nil
 	}
 
-	var categoriesWithEmptyStrings []string
-	var categories []string
-	categoryRaw := params.Get("categories")
-	categoriesWithEmptyStrings = strings.Split(categoryRaw, ",")
+	names := params.Get("names")
+	nameList := strings.Split(names, ",")
 
-	for _, category := range categoriesWithEmptyStrings {
-		trimmed := strings.TrimSpace(category)
-		if trimmed != "" {
-			categories = append(categories, trimmed)
-		}
+	maxAmountStr := params.Get("max_amount")
+	maxAmount, err := strconv.ParseFloat(maxAmountStr, 64)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid max amount: %s", appErrors.ErrInvalidInput, maxAmountStr)
 	}
 
-	transactionType := params.Get("type")
-	minAmount := params.Get("min")
-	maxAmount := params.Get("max")
-
-	var maxAmountFloat *float64
-	var minAmountFloat *float64
-
-	if minAmount != "" {
-		parsedMinAmount, err := strconv.ParseFloat(minAmount, 64)
-		if err == nil {
-			minAmountFloat = &parsedMinAmount
-		}
-		if err != nil {
-			return nil, fmt.Errorf("invalid minimum amount")
-		}
-	} else {
-		minAmountFloat = nil
-	}
-	if maxAmount != "" {
-		parsedMaxAmount, err := strconv.ParseFloat(maxAmount, 64)
-		if err == nil {
-			maxAmountFloat = &parsedMaxAmount
-		}
-		if err != nil {
-			return nil, fmt.Errorf("invalid maximum amount")
-		}
-	} else {
-		minAmountFloat = nil
-	}
-	if transactionType != "" {
-		if transactionType == "income" {
-			income := "+"
-			filters.Type = &income
-		} else if transactionType == "expense" {
-			expense := "-"
-			filters.Type = &expense
-		} else {
-			return nil, fmt.Errorf("invalid transaction type")
-		}
+	periodDayStr := params.Get("period_day")
+	periodDay, err := strconv.Atoi(periodDayStr)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid period day: %s", appErrors.ErrInvalidInput, periodDayStr)
 	}
 
-	filters.MinAmount = minAmountFloat
-	filters.MaxAmount = maxAmountFloat
-	filters.Categories = categories
+	createdAtStr := params.Get("created_at")
+	createdAt, err := time.Parse("02/01/2006", createdAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid created at date: %s", appErrors.ErrInvalidInput, createdAtStr)
+	}
+	filters.Names = nameList
+	filters.MaxAmount = maxAmount
+	filters.PeriodDay = periodDay
+	filters.CreatedAt = createdAt
 	return &filters, nil
 }
 
-func CategoriesListValidateParams(params url.Values) (*budget.CategoriesListFilters, error) {
-	var filters budget.CategoriesListFilters
-	if len(params) == 0 {
-		filters.IsAllNil = true
-		return &filters, nil
-	}
+// func CategoriesListValidateParams(params url.Values) (*budget.CategoriesListFilters, error) {
+// 	var filters budget.CategoriesListFilters
+// 	if len(params) == 0 {
+// 		filters.IsAllNil = true
+// 		return &filters, nil
+// 	}
 
-	categoryType := strings.ToLower(params.Get("type"))
-	if categoryType != "income" && categoryType != "expense" {
-		return nil, fmt.Errorf("%w: invalid category type: %s", appErrors.ErrInvalidInput, categoryType)
-	} else {
-		if categoryType == "income" {
-			filters.Type = "+"
-		} else {
-			categoryType = "-"
-		}
-	}
+// 	categoryType := strings.ToLower(params.Get("type"))
+// 	if categoryType != "income" && categoryType != "expense" {
+// 		return nil, fmt.Errorf("%w: invalid category type: %s", appErrors.ErrInvalidInput, categoryType)
+// 	} else {
+// 		if categoryType == "income" {
+// 			filters.Type = "+"
+// 		} else {
+// 			categoryType = "-"
+// 		}
+// 	}
 
-	if periodStr := params.Get("period"); periodStr != "" {
-		if periodInt, err := strconv.Atoi(periodStr); err == nil {
-			filters.PeriodDays = periodInt
-		} else {
-			return nil, fmt.Errorf("failed to convert string periods days to integer: %w", err)
-		}
-	}
+// 	if periodStr := params.Get("period"); periodStr != "" {
+// 		if periodInt, err := strconv.Atoi(periodStr); err == nil {
+// 			filters.PeriodDays = periodInt
+// 		} else {
+// 			return nil, fmt.Errorf("failed to convert string periods days to integer: %w", err)
+// 		}
+// 	}
 
-	if namesStr := params.Get("names"); namesStr != "" {
-		filters.Names = strings.Split(namesStr, ",")
-	}
+// 	if namesStr := params.Get("names"); namesStr != "" {
+// 		filters.Names = strings.Split(namesStr, ",")
+// 	}
 
-	if limitStr := params.Get("limit"); limitStr != "" {
-		if limitInt, err := strconv.Atoi(limitStr); err == nil {
-			filters.LimitAmount = float64(limitInt)
-		} else {
-			return nil, fmt.Errorf("failed to convert string category limit to integer: %w", err)
-		}
-	}
+// 	if limitStr := params.Get("limit"); limitStr != "" {
+// 		if limitInt, err := strconv.Atoi(limitStr); err == nil {
+// 			filters.LimitAmount = float64(limitInt)
+// 		} else {
+// 			return nil, fmt.Errorf("failed to convert string category limit to integer: %w", err)
+// 		}
+// 	}
 
-	layout := "2006-01-02" // il ay gun
-	if start := params.Get("startDate"); start != "" {
-		if date, err := time.Parse(layout, start); err == nil {
-			filters.StartDate = date
-		} else {
-			return nil, fmt.Errorf("failed to convert start date: %w", err)
-		}
-	}
-	if end := params.Get("endDate"); end != "" {
-		if date, err := time.Parse(layout, end); err == nil {
-			filters.EndDate = date
-		} else {
-			return nil, fmt.Errorf("failed to convert end date: %w", err)
-		}
-	}
+// 	layout := "2006-01-02" // il ay gun
+// 	if start := params.Get("startDate"); start != "" {
+// 		if date, err := time.Parse(layout, start); err == nil {
+// 			filters.StartDate = date
+// 		} else {
+// 			return nil, fmt.Errorf("failed to convert start date: %w", err)
+// 		}
+// 	}
+// 	if end := params.Get("endDate"); end != "" {
+// 		if date, err := time.Parse(layout, end); err == nil {
+// 			filters.EndDate = date
+// 		} else {
+// 			return nil, fmt.Errorf("failed to convert end date: %w", err)
+// 		}
+// 	}
 
-	return &filters, nil
-}
+// 	return &filters, nil
+// }

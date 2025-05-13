@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
@@ -211,93 +210,214 @@ func NilToNullString(v *string) sql.NullString {
 	return sql.NullString{Valid: true, String: *v}
 }
 
-func (mySql *MySQLStorage) GetFilteredCategories(userID string, filters *budget.CategoriesListFilters) ([]budget.ExpenseCategory, error) {
-	// TODO: implement the function
-	return nil, fmt.Errorf("not implemented")
+func (mySql *MySQLStorage) GetTotalAmountOfTransactions(userID string, categoryName string, categoryType string) (float64, error) {
+	query := `
+		SELECT IFNULL(SUM(amount), 0)
+		FROM transactions
+		WHERE created_by = ?
+	`
+
+	args := []interface{}{userID}
+	if categoryName != "" {
+		query += " AND category_name = ?"
+		args = append(args, categoryName)
+	}
+
+	if categoryType != "" {
+		query += " AND category_type = ?"
+		args = append(args, categoryType)
+	}
+
+	var total float64
+	err := mySql.db.QueryRow(query, args...).Scan(&total)
+	if err != nil {
+		return 0, err
+	}
+
+	return total, nil
 }
 
-func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budget.ListTransactionsFilters) ([]budget.Transaction, error) {
-	var query string
-	args := []interface{}{
-		userID,
-	}
+func (mySql *MySQLStorage) GetFilteredExpenseCategories(userID string, filters *budget.ExpenseCategoryList) ([]budget.ExpenseCategoryResponse, error) {
+	query := "SELECT id, name, max_amount, period_day, created_at, updated_at, note, created_by FROM expense_categories WHERE created_by = ?"
+	args := []interface{}{userID}
 
 	if filters.IsAllNil {
-		query = "SELECT id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by FROM transactions WHERE created_by = ?;"
-	} else if len(filters.Categories) == 0 {
-		query = `SELECT id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by 
-          FROM transactions 
-          WHERE created_by = ? 
-          AND (? IS NULL OR amount >= ?) 
-          AND (? IS NULL OR amount <= ?) 
-          AND (? IS NULL OR type = ?)`
+		query += ";"
 
-		args = append(args,
-			NilToNullFloat64(filters.MinAmount),
-			NilToNullFloat64(filters.MinAmount),
-			NilToNullFloat64(filters.MaxAmount),
-			NilToNullFloat64(filters.MaxAmount),
-			NilToNullString(filters.Type),
-			NilToNullString(filters.Type),
-		)
-	} else {
-		categories := make([]interface{}, len(filters.Categories))
-		for idx, category := range filters.Categories {
-			categories[idx] = category
+		rows, err := mySql.db.Query(query, args...)
+		if err != nil {
+			return nil, err
 		}
-		query = `SELECT id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by 
-          FROM transactions 
-          WHERE created_by = ? 
-          AND (? IS NULL OR amount >= ?) 
-          AND (? IS NULL OR amount <= ?) 
-          AND (? IS NULL OR type = ?) 
-          AND category IN (?` + strings.Repeat(",?", len(categories)-1) + `)`
+		defer rows.Close()
 
-		args = append(args,
-			NilToNullFloat64(filters.MinAmount),
-			NilToNullFloat64(filters.MinAmount),
-			NilToNullFloat64(filters.MaxAmount),
-			NilToNullFloat64(filters.MaxAmount),
-			NilToNullString(filters.Type),
-			NilToNullString(filters.Type),
-		)
-		args = append(args, categories...)
+		var categories []budget.ExpenseCategoryResponse
+		for rows.Next() {
+			var category budget.ExpenseCategoryResponse
+			categoryAmount, err := mySql.GetTotalAmountOfTransactions(userID, category.Name, "-")
+			if err != nil {
+				return nil, fmt.Errorf("failed to get total amount of transactions: %w", err)
+			}
+			var createdAt string
+			var updatedAt string
+
+			err = rows.Scan(&category.ID, &category.Name, &category.MaxAmount, &category.PeriodDay, &createdAt, &updatedAt, &category.Note, &category.CreatedBy)
+			if err != nil {
+				return nil, err
+			}
+			category.Amount = categoryAmount
+
+			category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse created_at: %w", err)
+			}
+			category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse updated_at: %w", err)
+			}
+			categories = append(categories, category)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return categories, nil
 	}
 
-	rows, err := mySql.db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get transactions: %w", err)
-	}
-	defer rows.Close()
+	// if filters.Type != "" {
+	// 	query += " AND type = ?"
+	// 	args = append(args, filters.Type)
+	// }
 
-	var transactions []budget.Transaction
-	for rows.Next() {
-		var t dbTransaction
-		err := rows.Scan(&t.ID, &t.Amount, &t.Limit, &t.Currency, &t.Category, &t.CreatedDate, &t.UpdatedDate, &t.Type, &t.CreatedBy)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan transaction: %w", err)
-		}
+	// if filters.PeriodDays > 0 {
+	// 	query += " AND period_day = ?"
+	// 	args = append(args, filters.PeriodDays)
+	// }
 
-		_, err = time.Parse("2006-01-02 15:04:05", t.CreatedDate)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse created_date")
-		}
-		_, err = time.Parse("2006-01-02 15:04:05", t.UpdatedDate)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse updated_date")
-		}
-		var usagePercent int
-		if t.Limit != 0 {
-			usagePercent = (int(t.Amount) * 100) / int(t.Limit)
-		} else {
-			usagePercent = 0
-		}
-		_ = usagePercent
-		budgetT := budget.Transaction{}
-		transactions = append(transactions, budgetT)
-	}
-	return transactions, nil
+	// if len(filters.Names) > 0 {
+	// 	query += " AND name IN (?" + strings.Repeat(",?", len(filters.Names)-1) + ")"
+	// 	for _, name := range filters.Names {
+	// 		args = append(args, name)
+	// 	}
+	// }
+
+	// if filters.LimitAmount > 0 {
+	// 	query += " AND max_amount <= ?"
+	// 	args = append(args, filters.LimitAmount)
+	// }
+
+	// if !filters.StartDate.IsZero() {
+	// 	query += " AND created_at >= ?"
+	// 	args = append(args, filters.StartDate)
+	// }
+
+	// if !filters.EndDate.IsZero() {
+	// 	query += " AND created_at <= ?"
+	// 	args = append(args, filters.EndDate)
+	// }
+
+	// rows, err := mySql.db.Query(query, args...)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// defer rows.Close()
+
+	// var categories []budget.ExpenseCategoryResponse
+	// for rows.Next() {
+	// 	var cat budget.ExpenseCategoryResponse
+	// 	err := rows.Scan(&cat.ID, &cat.Name, &cat.MaxAmount, &cat.PeriodDay,
+	// 		&cat.CreatedAt, &cat.UpdatedAt, &cat.Note, &cat.CreatedBy, &cat.Type)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	categories = append(categories, cat)
+	// }
+	// if err := rows.Err(); err != nil {
+	// 	return nil, err
+	// }
+	return nil, nil
 }
+
+// func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budget.ListTransactionsFilters) ([]budget.Transaction, error) {
+// 	var query string
+// 	args := []interface{}{
+// 		userID,
+// 	}
+
+// 	if filters.IsAllNil {
+// 		query = "SELECT id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by FROM transactions WHERE created_by = ?;"
+// 	} else if len(filters.Categories) == 0 {
+// 		query = `SELECT id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by
+//           FROM transactions
+//           WHERE created_by = ?
+//           AND (? IS NULL OR amount >= ?)
+//           AND (? IS NULL OR amount <= ?)
+//           AND (? IS NULL OR type = ?)`
+
+// 		args = append(args,
+// 			NilToNullFloat64(filters.MinAmount),
+// 			NilToNullFloat64(filters.MinAmount),
+// 			NilToNullFloat64(filters.MaxAmount),
+// 			NilToNullFloat64(filters.MaxAmount),
+// 			NilToNullString(filters.Type),
+// 			NilToNullString(filters.Type),
+// 		)
+// 	} else {
+// 		categories := make([]interface{}, len(filters.Categories))
+// 		for idx, category := range filters.Categories {
+// 			categories[idx] = category
+// 		}
+// 		query = `SELECT id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by
+//           FROM transactions
+//           WHERE created_by = ?
+//           AND (? IS NULL OR amount >= ?)
+//           AND (? IS NULL OR amount <= ?)
+//           AND (? IS NULL OR type = ?)
+//           AND category IN (?` + strings.Repeat(",?", len(categories)-1) + `)`
+
+// 		args = append(args,
+// 			NilToNullFloat64(filters.MinAmount),
+// 			NilToNullFloat64(filters.MinAmount),
+// 			NilToNullFloat64(filters.MaxAmount),
+// 			NilToNullFloat64(filters.MaxAmount),
+// 			NilToNullString(filters.Type),
+// 			NilToNullString(filters.Type),
+// 		)
+// 		args = append(args, categories...)
+// 	}
+
+// 	rows, err := mySql.db.Query(query, args...)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get transactions: %w", err)
+// 	}
+// 	defer rows.Close()
+
+// 	var transactions []budget.Transaction
+// 	for rows.Next() {
+// 		var t dbTransaction
+// 		err := rows.Scan(&t.ID, &t.Amount, &t.Limit, &t.Currency, &t.Category, &t.CreatedDate, &t.UpdatedDate, &t.Type, &t.CreatedBy)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("failed to scan transaction: %w", err)
+// 		}
+
+// 		_, err = time.Parse("2006-01-02 15:04:05", t.CreatedDate)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("failed to parse created_date")
+// 		}
+// 		_, err = time.Parse("2006-01-02 15:04:05", t.UpdatedDate)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("failed to parse updated_date")
+// 		}
+// 		var usagePercent int
+// 		if t.Limit != 0 {
+// 			usagePercent = (int(t.Amount) * 100) / int(t.Limit)
+// 		} else {
+// 			usagePercent = 0
+// 		}
+// 		_ = usagePercent
+// 		budgetT := budget.Transaction{}
+// 		transactions = append(transactions, budgetT)
+// 	}
+// 	return transactions, nil
+// }
 
 func (mySql *MySQLStorage) GetTotals(userID string, filters budget.GetTotals) (budget.GetTotals, error) {
 	var query string

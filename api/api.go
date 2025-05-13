@@ -187,14 +187,14 @@ func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(201).Text(msg)
 
 }
-func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
+func (api *Api) GetFilteredExpenseCategoriesHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
 		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
 		return iz.Respond().Status(401).Text(msg)
 	}
 
-	_, err := api.Service.CheckSession(token)
+	userId, err := api.Service.CheckSession(token)
 	if err != nil {
 		msg := fmt.Sprintf("authorization failed: %s", err.Error())
 		return iz.Respond().Status(401).Text(msg)
@@ -202,27 +202,25 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 
 	params := r.URL.Query()
 
-	_, err = ListValidateParams(params)
+	filter, err := ExpenseCategoryCheckParams(params)
 	if err != nil {
 		msg := fmt.Sprintf("invalid filter parameteres: %s", err.Error())
-		return iz.Respond().Status(400).Text(msg)
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 
-	// ts, err := api.Service.GetFilteredTransactions(userId, filters)
-	// if err != nil {
-	// 	logging.Logger.Errorf("Failed to get filtered transactions request: %v", err)
-	// 	msg := fmt.Sprintf("failed to get transactions")
-	// 	return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
-	// }
-	// var tsContainer ListTransactionResponse
+	categories, err := api.Service.GetFilteredExpenseCategories(userId, filter)
+	if err != nil {
+		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
+	}
 
-	// tsForHttp := make([]TransactionItem, 0, len(ts))
+	// Convert to HTTP format
+	var categoryList ListExpenseCategories
+	for _, c := range categories {
+		categoryList.Categories = append(categoryList.Categories, ExpenseCategoryToHttp(c))
+	}
 
-	// for _, t := range ts {
-	// 	tForHttp := TransactionToHttp(t)
-	// 	tsContainer.Transactions = append(tsContainer.Transactions, tForHttp)
-	// }
-	return iz.Respond().Status(200).JSON("success")
+	return iz.Respond().Status(200).JSON(categoryList)
+
 }
 
 func (api *Api) GetFilteredCategoriesHandler(r *iz.Request) iz.Responder {
