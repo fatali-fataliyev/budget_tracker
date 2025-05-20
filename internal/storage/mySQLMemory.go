@@ -280,7 +280,6 @@ func (mySql *MySQLStorage) GetFilteredIncomeCategories(userID string, filters *b
 
 	if filters.IsAllNil {
 		query += ";"
-		fmt.Println("is all nil: ", filters.IsAllNil)
 		rows, err := mySql.db.Query(query, args...)
 		if err != nil {
 			return nil, err
@@ -391,7 +390,6 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(userID string, filters *
 
 	if filters.IsAllNil {
 		query += ";"
-		fmt.Println("is all nil: ", filters.IsAllNil)
 		rows, err := mySql.db.Query(query, args...)
 		if err != nil {
 			return nil, err
@@ -498,12 +496,103 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(userID string, filters *
 	return categories, nil
 }
 
+func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budget.TransactionList) ([]budget.Transaction, error) {
+	query := "SELECT id, category_name, amount, currency, created_at, note, created_by, category_type FROM transactions WHERE created_by = ?"
+	args := []interface{}{userID}
+
+	if filters.IsAllNil {
+		query += ";"
+		rows, err := mySql.db.Query(query, args...)
+		if err != nil {
+			fmt.Print("Error when getting transactions: ", err)
+			return nil, err
+		}
+
+		defer rows.Close()
+
+		var transactions []budget.Transaction
+		for rows.Next() {
+			var transaction budget.Transaction
+			var createdAt string
+
+			err = rows.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &createdAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
+			if err != nil {
+				fmt.Print("Error when scanning transaction: ", err)
+				return nil, err
+			}
+			transaction.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse created_at of transaction: %w", err)
+			}
+			transactions = append(transactions, transaction)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return transactions, nil
+	}
+
+	if len(filters.CategoryNames) > 0 {
+		query += " AND category_name IN (?" + strings.Repeat(",?", len(filters.CategoryNames)-1) + ")"
+		for _, name := range filters.CategoryNames {
+			args = append(args, name)
+		}
+	}
+
+	if filters.Amount > 0 {
+		query += " AND amount >= ?"
+		args = append(args, filters.Amount)
+	}
+
+	if !filters.CreatedAt.IsZero() {
+		query += " AND created_at >= ?"
+		args = append(args, filters.CreatedAt)
+	}
+
+	if filters.Currency != "" {
+		query += " AND currency = ?"
+		args = append(args, filters.Currency)
+	}
+
+	if filters.Type != "" {
+		query += " AND category_type = ?"
+		args = append(args, filters.Type)
+	}
+
+	rows, err := mySql.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var transactions []budget.Transaction
+	for rows.Next() {
+		var transaction budget.Transaction
+		var createdAt string
+
+		err = rows.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &createdAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
+		if err != nil {
+			return nil, err
+		}
+		transaction.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse created_at of transaction: %w", err)
+		}
+		transactions = append(transactions, transaction)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return transactions, nil
+}
+
 func (mySql *MySQLStorage) GetTransactionById(userID string, transactionId string) (budget.Transaction, error) {
-	query := "SELECT id, amount, limit_for_amount, currency, category, created_date, updated_date, type, created_by FROM transactions WHERE created_by = ? AND id = ?;"
+	query := "SELECT id, category_name, amount, currency, created_at, note, created_by, category_type FROM transactions WHERE created_by = ? AND id = ?;"
 	row := mySql.db.QueryRow(query, userID, transactionId)
 
-	var t dbTransaction
-	err := row.Scan(&t.ID, &t.Amount, &t.Limit, &t.Currency, &t.Category, &t.CreatedDate, &t.UpdatedDate, &t.Type, &t.CreatedBy)
+	var transaction budget.Transaction
+	var createdAt string
+	err := row.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &createdAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return budget.Transaction{}, fmt.Errorf("%w: transaction not found", appErrors.ErrNotFound)
@@ -511,23 +600,12 @@ func (mySql *MySQLStorage) GetTransactionById(userID string, transactionId strin
 		return budget.Transaction{}, fmt.Errorf("failed to scan transaction: %w", err)
 	}
 
-	_, err = time.Parse("2006-01-02 15:04:05", t.CreatedDate)
+	transaction.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 	if err != nil {
 		return budget.Transaction{}, fmt.Errorf("failed to parse created_date")
 	}
-	_, err = time.Parse("2006-01-02 15:04:05", t.UpdatedDate)
-	if err != nil {
-		return budget.Transaction{}, fmt.Errorf("failed to parse updated_date")
-	}
-	var usagePercent int
-	_ = usagePercent
-	if t.Limit != 0 {
-		usagePercent = (int(t.Amount) * 100) / int(t.Limit)
-	} else {
-		usagePercent = 0
-	}
-	budgetT := budget.Transaction{}
-	return budgetT, nil
+
+	return transaction, nil
 }
 
 func (mySql *MySQLStorage) ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error) {

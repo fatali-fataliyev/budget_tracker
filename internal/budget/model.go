@@ -109,3 +109,12 @@ type ExpenseCategoryList struct {
 	EndDate   time.Time
 	IsAllNil  bool
 }
+
+type TransactionList struct {
+	CategoryNames []string
+	Amount        float64
+	Currency      string
+	CreatedAt     time.Time
+	Type          string
+	IsAllNil      bool
+}

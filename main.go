@@ -45,8 +45,8 @@ func main() {
 	server.HandleFunc("GET /category/expense", iz.Bind(api.GetFilteredExpenseCategoriesHandler))
 	server.HandleFunc("POST /category/income", iz.Bind(api.SaveIncomeCategoryHandler))
 	server.HandleFunc("GET /category/income", iz.Bind(api.GetFilteredIncomeCategoriesHandler))
+	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler))
 	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler))
-	server.HandleFunc("DELETE /transaction/{id}", iz.Bind(api.DeleteTransactionHandler))
 
 	fmt.Println("server is running")
 	port := "8080"

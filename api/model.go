@@ -61,14 +61,12 @@ type LoginResponse struct {
 }
 type TransactionItem struct {
 	ID           string  `json:"id"`
+	CategoryName string  `json:"category_name"`
 	Amount       float64 `json:"amount"`
-	Limit        float64 `json:"limit"`
-	UsagePercent int     `json:"usage_percent"`
 	Currency     string  `json:"currency"`
-	Category     string  `json:"category"`
 	CreatedAt    string  `json:"created_at"`
-	UpdatedAt    string  `json:"updated_at"`
-	Type         string  `json:"type"`
+	Note         string  `json:"note"`
+	Type         string  `json:"category_type"`
 	CreatedBy    string  `json:"created_by"`
 }
 
@@ -134,16 +132,14 @@ func httpStatusFromError(err error) int {
 
 func TransactionToHttp(transcation budget.Transaction) TransactionItem {
 	return TransactionItem{
-		// ID:           transcation.ID,
-		// Amount:       transcation.Amount,
-		// Limit:        transcation.Limit,
-		// UsagePercent: transcation.UsagePercent,
-		// Currency:     transcation.Currency,
-		// Category:     transcation.Category,
-		// CreatedAt:    transcation.CreatedDate.Format("02/01/2006 15:04"),
-		// UpdatedAt:    transcation.UpdatedDate.Format("02/01/2006 15:04"),
-		// Type:         transcation.Type,
-		// CreatedBy:    transcation.CreatedBy,
+		ID:           transcation.ID,
+		CategoryName: transcation.CategoryName,
+		Amount:       transcation.Amount,
+		Currency:     transcation.Currency,
+		CreatedAt:    transcation.CreatedAt.Format(time.RFC3339),
+		Note:         transcation.Note,
+		Type:         transcation.CategoryType,
+		CreatedBy:    transcation.CreatedBy,
 	}
 }
 
@@ -156,8 +152,8 @@ func ExpenseCategoryToHttp(category budget.ExpenseCategoryResponse) ExpenseCateg
 		PeriodDay:    category.PeriodDay,
 		IsExpired:    category.IsExpired,
 		UsagePercent: category.UsagePercent,
-		CreatedAt:    category.CreatedAt.Format("02/01/2006 15:04"),
-		UpdatedAt:    category.UpdatedAt.Format("02/01/2006 15:04"),
+		CreatedAt:    category.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:    category.UpdatedAt.Format(time.RFC3339),
 		Note:         category.Note,
 		CreatedBy:    category.CreatedBy,
 	}
@@ -171,8 +167,8 @@ func IncomeCategoryToHttp(category budget.IncomeCategoryResponse) InomeCategoryR
 		Amount:       category.Amount,
 		TargetAmount: category.TargetAmount,
 		UsagePercent: category.UsagePercent,
-		CreatedAt:    category.CreatedAt.Format("02/01/2006 15:04"),
-		UpdatedAt:    category.UpdatedAt.Format("02/01/2006 15:04"),
+		CreatedAt:    category.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:    category.UpdatedAt.Format(time.RFC3339),
 		Note:         category.Note,
 		CreatedBy:    category.CreatedBy,
 	}
@@ -290,6 +286,69 @@ func ExpenseCategoryCheckParams(params url.Values) (*budget.ExpenseCategoryList,
 		if !filters.CreatedAt.IsZero() && endDate.Before(filters.CreatedAt) {
 			return nil, fmt.Errorf("%w: end date cannot be before created at date", appErrors.ErrInvalidInput)
 		}
+	}
+
+	filters.IsAllNil = !hasAnyFilter
+	return &filters, nil
+}
+
+func TransactionCheckParams(params url.Values) (*budget.TransactionList, error) {
+	var filters budget.TransactionList
+
+	if len(params) == 0 {
+		filters.IsAllNil = true
+		return &filters, nil
+	}
+
+	hasAnyFilter := false
+
+	categoryNames := params.Get("category_names")
+
+	if categoryNames != "" {
+		filters.CategoryNames = strings.Split(categoryNames, ",")
+		hasAnyFilter = true
+	}
+
+	amount := params.Get("amount")
+	if amount != "" {
+		maxAmount, err := strconv.ParseFloat(amount, 64)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid max amount: %s", appErrors.ErrInvalidInput, amount)
+		}
+		filters.Amount = maxAmount
+		hasAnyFilter = true
+	}
+
+	currency := params.Get("currency")
+	if currency != "" {
+		filters.Currency = currency
+		hasAnyFilter = true
+	}
+
+	createdAtStr := params.Get("created_at")
+	if createdAtStr != "" {
+		createdAt, err := time.Parse("02/01/2006", createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid created at date: %s", appErrors.ErrInvalidInput, createdAtStr)
+		}
+		filters.CreatedAt = createdAt.UTC()
+		hasAnyFilter = true
+	}
+
+	categoryType := params.Get("category_type")
+	if categoryType != "" {
+		if categoryType != "income" && categoryType != "expense" {
+			return nil, fmt.Errorf("%w: invalid category type: %s", appErrors.ErrInvalidInput, categoryType)
+		} else {
+			if categoryType == "income" {
+				filters.Type = "+"
+				hasAnyFilter = true
+			} else {
+				filters.Type = "-"
+				hasAnyFilter = true
+			}
+		}
+
 	}
 
 	filters.IsAllNil = !hasAnyFilter
