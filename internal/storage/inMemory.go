@@ -96,7 +96,7 @@ func (inMem *InMemeoryStorage) GetTransactionsByType(userId string, transactionT
 func (inMem *InMemeoryStorage) GetTransactionsByCategory(userId string, category string) ([]budgetModel.Transaction, error) {
 	results := []budgetModel.Transaction{}
 	for _, transaction := range inMem.transactions {
-		if transaction.Category == category && transaction.CreatedBy == userId {
+		if transaction.CategoryName == category && transaction.CreatedBy == userId {
 			results = append(results, transaction)
 		}
 	}

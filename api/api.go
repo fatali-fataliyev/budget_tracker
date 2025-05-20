@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/0xcafe-io/iz"
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
@@ -71,24 +70,17 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 		msg := fmt.Sprintf("failed to parse save transaction request: %v", err)
 		return iz.Respond().Status(500).Text(msg)
 	}
-	amountStr := newTransactionReq.Amount
 
-	if len(amountStr) == 0 || (amountStr[0] != '+' && amountStr[0] != '-') {
-		msg := fmt.Sprintf("invalid transaction amount format: '%s'", amountStr)
-		return iz.Respond().Status(400).Text(msg)
-	}
-
-	amountValue, err := strconv.ParseFloat(amountStr, 64)
 	if err != nil {
 		msg := fmt.Sprintf("failed to convert amount: %v", err)
 		return iz.Respond().Status(400).Text(msg)
 	}
 
 	newTransaction := budget.TransactionRequest{
-		Category: newTransactionReq.Category,
-		Amount:   amountValue,
-		Currency: newTransactionReq.Currency,
-		Note:     newTransactionReq.Note,
+		CategoryName: newTransactionReq.CategoryName,
+		Amount:       newTransactionReq.Amount,
+		Currency:     newTransactionReq.Currency,
+		Note:         newTransactionReq.Note,
 	}
 
 	if err := api.Service.SaveTransaction(userId, newTransaction); err != nil {
@@ -187,14 +179,15 @@ func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(201).Text(msg)
 
 }
-func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
+
+func (api *Api) GetFilteredIncomeCategoriesHandler(r *iz.Request) iz.Responder {
 	token := r.Header.Get("Authorization")
 	if token == "" {
 		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
 		return iz.Respond().Status(401).Text(msg)
 	}
 
-	_, err := api.Service.CheckSession(token)
+	userId, err := api.Service.CheckSession(token)
 	if err != nil {
 		msg := fmt.Sprintf("authorization failed: %s", err.Error())
 		return iz.Respond().Status(401).Text(msg)
@@ -202,27 +195,57 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 
 	params := r.URL.Query()
 
-	_, err = ListValidateParams(params)
+	filter, err := IncomeCategoryCheckParams(params)
 	if err != nil {
 		msg := fmt.Sprintf("invalid filter parameteres: %s", err.Error())
-		return iz.Respond().Status(400).Text(msg)
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
 
-	// ts, err := api.Service.GetFilteredTransactions(userId, filters)
-	// if err != nil {
-	// 	logging.Logger.Errorf("Failed to get filtered transactions request: %v", err)
-	// 	msg := fmt.Sprintf("failed to get transactions")
-	// 	return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
-	// }
-	// var tsContainer ListTransactionResponse
+	categories, err := api.Service.GetFilteredIncomeCategories(userId, filter)
+	if err != nil {
+		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
+	}
+	var categoryList ListIncomeCategories
+	for _, c := range categories {
+		categoryList.Categories = append(categoryList.Categories, IncomeCategoryToHttp(c))
+	}
 
-	// tsForHttp := make([]TransactionItem, 0, len(ts))
+	return iz.Respond().Status(200).JSON(categoryList)
 
-	// for _, t := range ts {
-	// 	tForHttp := TransactionToHttp(t)
-	// 	tsContainer.Transactions = append(tsContainer.Transactions, tForHttp)
-	// }
-	return iz.Respond().Status(200).JSON("success")
+}
+
+func (api *Api) GetFilteredExpenseCategoriesHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	params := r.URL.Query()
+
+	filter, err := ExpenseCategoryCheckParams(params)
+	if err != nil {
+		msg := fmt.Sprintf("invalid filter parameteres: %s", err.Error())
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
+
+	categories, err := api.Service.GetFilteredExpenseCategories(userId, filter)
+	if err != nil {
+		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
+	}
+	var categoryList ListExpenseCategories
+	for _, c := range categories {
+		categoryList.Categories = append(categoryList.Categories, ExpenseCategoryToHttp(c))
+	}
+
+	return iz.Respond().Status(200).JSON(categoryList)
+
 }
 
 func (api *Api) GetFilteredCategoriesHandler(r *iz.Request) iz.Responder {

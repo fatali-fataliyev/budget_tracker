@@ -45,10 +45,10 @@ type Storage interface {
 	UpdateSession(userId string, expireAt time.Time) error
 	GetSessionByToken(token string) (auth.Session, error)
 	SaveTransaction(t Transaction) error
-	GetFilteredTransactions(userID string, filters *ListTransactionsFilters) ([]Transaction, error)
-	GetFilteredCategories(userID string, filters *CategoriesListFilters) ([]ExpenseCategory, error)
+	// GetFilteredTransactions(userID string) ([]Transaction, error)
+	GetFilteredExpenseCategories(userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error)
+	GetFilteredIncomeCategories(userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error)
 	GetTransactionById(userID string, transacationID string) (Transaction, error)
-	GetTotals(userId string, filters GetTotals) (GetTotals, error)
 	ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error)
 	IsUserExists(username string) (bool, error)
 	IsEmailConfirmed(emailAddress string) bool
@@ -187,7 +187,7 @@ func (bt *BudgetTracker) SaveTransaction(userId string, transaction TransactionR
 	if transaction.Amount > MAX_TRANSACTION_AMOUNT_LIMIT {
 		return fmt.Errorf("%w: maximum allowed amount per transaction is: %d", appErrors.ErrInvalidInput, MAX_TRANSACTION_AMOUNT_LIMIT)
 	}
-	if len(transaction.Category) > MAX_TRANSACTION_CATEGORY_NAME_LENGTH {
+	if len(transaction.CategoryName) > MAX_TRANSACTION_CATEGORY_NAME_LENGTH {
 		return fmt.Errorf("%w: category name so long.", appErrors.ErrInvalidInput)
 	}
 	if len(transaction.Currency) > MAX_TRANSACTION_CURRENCY_LENGTH {
@@ -199,15 +199,14 @@ func (bt *BudgetTracker) SaveTransaction(userId string, transaction TransactionR
 	}
 
 	now := time.Now().UTC()
-
 	t := Transaction{
-		ID:        uuid.New().String(),
-		Category:  transaction.Category,
-		Amount:    transaction.Amount,
-		Currency:  transaction.Currency,
-		CreatedAt: now,
-		Note:      transaction.Note,
-		CreatedBy: userId,
+		ID:           uuid.New().String(),
+		CategoryName: transaction.CategoryName,
+		Amount:       transaction.Amount,
+		Currency:     transaction.Currency,
+		CreatedAt:    now,
+		Note:         transaction.Note,
+		CreatedBy:    userId,
 	}
 
 	if err := bt.storage.SaveTransaction(t); err != nil {
@@ -269,28 +268,80 @@ func (bt *BudgetTracker) SaveIncomeCategory(userId string, category IncomeCatego
 	return nil
 }
 
-func (bt *BudgetTracker) GetFilteredTransactions(userId string, filters *ListTransactionsFilters) ([]Transaction, error) {
-	ts, err := bt.storage.GetFilteredTransactions(userId, filters)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get transactions: %w", err)
-	}
-	return ts, nil
+func (bt *BudgetTracker) GetFilteredTransactions(userId string) ([]Transaction, error) {
+	// ts, err := bt.storage.GetFilteredTransactions(userId)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to get transactions: %w", err)
+	// }
+	// return ts, nil
+	return nil, nil
 }
 
-func (bt *BudgetTracker) GetFilteredCategories(userID string, filters *CategoriesListFilters) ([]ExpenseCategory, error) {
-	categories, err := bt.storage.GetFilteredCategories(userID, filters)
+func (bt *BudgetTracker) GetFilteredIncomeCategories(userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error) {
+	categoriesRaw, err := bt.storage.GetFilteredIncomeCategories(userID, filters)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get categories: %w", err)
+		return nil, fmt.Errorf("failed to get income categories: %w", err)
 	}
+
+	var categories []IncomeCategoryResponse
+
+	for _, category := range categoriesRaw {
+		var usagePercent int
+		if category.TargetAmount > 0 {
+			usagePercent = int((category.Amount / category.TargetAmount) * 100)
+		}
+
+		category := IncomeCategoryResponse{
+			ID:           category.ID,
+			Name:         category.Name,
+			Amount:       category.Amount,
+			TargetAmount: category.TargetAmount,
+			UsagePercent: usagePercent,
+			CreatedAt:    category.CreatedAt,
+			UpdatedAt:    category.UpdatedAt,
+			Note:         category.Note,
+			CreatedBy:    category.CreatedBy,
+		}
+		categories = append(categories, category)
+	}
+
 	return categories, nil
 }
 
-func (bt *BudgetTracker) GetTotals(userId string, filters GetTotals) (GetTotals, error) {
-	result, err := bt.storage.GetTotals(userId, filters)
+func (bt *BudgetTracker) GetFilteredExpenseCategories(userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error) {
+	categoriesRaw, err := bt.storage.GetFilteredExpenseCategories(userID, filters)
 	if err != nil {
-		return GetTotals{}, fmt.Errorf("failed to get totals: %w", err)
+		return nil, fmt.Errorf("failed to get expense categories: %w", err)
 	}
-	return result, nil
+
+	var categories []ExpenseCategoryResponse
+
+	for _, category := range categoriesRaw {
+		var usagePercent int
+		if category.MaxAmount > 0 {
+			usagePercent = int((category.Amount / category.MaxAmount) * 100)
+		}
+
+		isExpired := time.Now().UTC().After(category.CreatedAt.AddDate(0, 0, category.PeriodDay))
+
+		category := ExpenseCategoryResponse{
+			ID:           category.ID,
+			Name:         category.Name,
+			Amount:       category.Amount,
+			MaxAmount:    category.MaxAmount,
+			PeriodDay:    category.PeriodDay,
+			UsagePercent: usagePercent,
+			CreatedAt:    category.CreatedAt,
+			UpdatedAt:    category.UpdatedAt,
+			Note:         category.Note,
+			CreatedBy:    category.CreatedBy,
+			IsExpired:    isExpired,
+		}
+
+		categories = append(categories, category)
+	}
+
+	return categories, nil
 }
 
 func (bt *BudgetTracker) GetTranscationById(userId string, transactionId string) (Transaction, error) {
@@ -299,32 +350,6 @@ func (bt *BudgetTracker) GetTranscationById(userId string, transactionId string)
 		return Transaction{}, fmt.Errorf("failed to get transaction by id: %w", err)
 	}
 	return t, nil
-}
-
-func (bt *BudgetTracker) ChangeAmountOfTransaction(userId string, tId string, tType string, amount float64) error {
-	_, err := bt.storage.GetTransactionById(userId, tId)
-	if err != nil {
-		return fmt.Errorf("failed to change amount of transaction: %w", err)
-	}
-
-	if tType == "expense" {
-		tType = "-"
-	} else if tType == "income" {
-		tType = "+"
-	} else {
-		return fmt.Errorf("%w: invalid transaction type", appErrors.ErrInvalidInput)
-	}
-	if amount > MAX_TRANSACTION_AMOUNT_LIMIT {
-		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%2.f", appErrors.ErrInvalidInput, MAX_TRANSACTION_AMOUNT_LIMIT, amount)
-	}
-	if amount > 300 {
-		return fmt.Errorf("%w: amount cannot be greater than the limit, limit for this transaction is: %2.f", appErrors.ErrInvalidInput, 300)
-	}
-	err = bt.storage.ChangeAmountOfTransaction(userId, tId, tType, amount)
-	if err != nil {
-		return fmt.Errorf("failed to change amount of transaction: %w", err)
-	}
-	return nil
 }
 
 func (bt *BudgetTracker) DeleteTransaction(userId string, transactionId string) error {
