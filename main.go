@@ -42,6 +42,8 @@ func main() {
 	server.HandleFunc("POST /logout", iz.Bind(api.LogoutUserHandler))
 	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))
 	server.HandleFunc("POST /category/expense", iz.Bind(api.SaveExpenseCategoryHandler))
+	server.HandleFunc("PUT /category/expense", iz.Bind(api.UpdateExpenseCategoryHandler))
+	server.HandleFunc("DELETE /category/expense/{id}", iz.Bind(api.SaveExpenseCategoryHandler))
 	server.HandleFunc("GET /category/expense", iz.Bind(api.GetFilteredExpenseCategoriesHandler))
 	server.HandleFunc("POST /category/income", iz.Bind(api.SaveIncomeCategoryHandler))
 	server.HandleFunc("GET /category/income", iz.Bind(api.GetFilteredIncomeCategoriesHandler))
