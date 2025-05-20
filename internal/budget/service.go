@@ -352,32 +352,6 @@ func (bt *BudgetTracker) GetTranscationById(userId string, transactionId string)
 	return t, nil
 }
 
-func (bt *BudgetTracker) ChangeAmountOfTransaction(userId string, tId string, tType string, amount float64) error {
-	_, err := bt.storage.GetTransactionById(userId, tId)
-	if err != nil {
-		return fmt.Errorf("failed to change amount of transaction: %w", err)
-	}
-
-	if tType == "expense" {
-		tType = "-"
-	} else if tType == "income" {
-		tType = "+"
-	} else {
-		return fmt.Errorf("%w: invalid transaction type", appErrors.ErrInvalidInput)
-	}
-	if amount > MAX_TRANSACTION_AMOUNT_LIMIT {
-		return fmt.Errorf("%w: amount exceeds maximum value: max:%d, entered:%2.f", appErrors.ErrInvalidInput, MAX_TRANSACTION_AMOUNT_LIMIT, amount)
-	}
-	if amount > 300 {
-		return fmt.Errorf("%w: amount cannot be greater than the limit, limit for this transaction is: %2.f", appErrors.ErrInvalidInput, 300)
-	}
-	err = bt.storage.ChangeAmountOfTransaction(userId, tId, tType, amount)
-	if err != nil {
-		return fmt.Errorf("failed to change amount of transaction: %w", err)
-	}
-	return nil
-}
-
 func (bt *BudgetTracker) DeleteTransaction(userId string, transactionId string) error {
 	tItem, err := bt.storage.GetTransactionById(userId, transactionId)
 	if err != nil {
