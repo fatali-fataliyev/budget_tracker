@@ -45,7 +45,7 @@ type Storage interface {
 	UpdateSession(userId string, expireAt time.Time) error
 	GetSessionByToken(token string) (auth.Session, error)
 	SaveTransaction(t Transaction) error
-	// GetFilteredTransactions(userID string) ([]Transaction, error)
+	GetFilteredTransactions(userID string, filters *TransactionList) ([]Transaction, error)
 	GetFilteredExpenseCategories(userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error)
 	GetFilteredIncomeCategories(userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error)
 	GetTransactionById(userID string, transacationID string) (Transaction, error)
@@ -268,15 +268,6 @@ func (bt *BudgetTracker) SaveIncomeCategory(userId string, category IncomeCatego
 	return nil
 }
 
-func (bt *BudgetTracker) GetFilteredTransactions(userId string) ([]Transaction, error) {
-	// ts, err := bt.storage.GetFilteredTransactions(userId)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to get transactions: %w", err)
-	// }
-	// return ts, nil
-	return nil, nil
-}
-
 func (bt *BudgetTracker) GetFilteredIncomeCategories(userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error) {
 	categoriesRaw, err := bt.storage.GetFilteredIncomeCategories(userID, filters)
 	if err != nil {
@@ -342,6 +333,28 @@ func (bt *BudgetTracker) GetFilteredExpenseCategories(userID string, filters *Ex
 	}
 
 	return categories, nil
+}
+
+func (bt *BudgetTracker) GetFilteredTransactions(userID string, filters *TransactionList) ([]Transaction, error) {
+	ts, err := bt.storage.GetFilteredTransactions(userID, filters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transactions: %w", err)
+	}
+	var transactions []Transaction
+	for _, transaction := range ts {
+		t := Transaction{
+			ID:           transaction.ID,
+			CategoryName: transaction.CategoryName,
+			CategoryType: transaction.CategoryType,
+			Amount:       transaction.Amount,
+			Currency:     transaction.Currency,
+			CreatedAt:    transaction.CreatedAt,
+			Note:         transaction.Note,
+			CreatedBy:    transaction.CreatedBy,
+		}
+		transactions = append(transactions, t)
+	}
+	return transactions, nil
 }
 
 func (bt *BudgetTracker) GetTranscationById(userId string, transactionId string) (Transaction, error) {
