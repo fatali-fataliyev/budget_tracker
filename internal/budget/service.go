@@ -53,7 +53,7 @@ type Storage interface {
 	IsUserExists(username string) (bool, error)
 	IsEmailConfirmed(emailAddress string) bool
 	ChangeAmountOfTransaction(userId string, tId string, tType string, amount float64) error
-	DeleteTransaction(userID string, transacationID string) error
+	UpdateExpenseCategory(userId string, fields UpdateExpenseCategoryRequest) (*ExpenseCategoryResponse, error)
 	LogoutUser(userId string, token string) error
 	GetStorageType() string
 }
@@ -335,6 +335,25 @@ func (bt *BudgetTracker) GetFilteredExpenseCategories(userID string, filters *Ex
 	return categories, nil
 }
 
+func (bt *BudgetTracker) UpdateExpenseCategory(userId string, fields UpdateExpenseCategoryRequest) (*ExpenseCategoryResponse, error) {
+	if fields.NewMaxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
+		return nil, fmt.Errorf("%w: category max amount is too large; the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
+	}
+	if len(fields.NewName) > MAX_CATEGORY_NAME_LENGTH {
+		return nil, fmt.Errorf("%w: category name is too long for category; the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
+	}
+	if len(fields.NewNote) > MAX_TRANSACTION_NOTE_LENGTH {
+		return nil, fmt.Errorf("%w: note so long, maximum allowed length is: %d", appErrors.ErrInvalidInput, MAX_TRANSACTION_NOTE_LENGTH)
+	}
+
+	fields.UpdateTime = time.Now().UTC()
+	category, err := bt.storage.UpdateExpenseCategory(userId, fields)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update expense category: %w", err)
+	}
+	return category, nil
+}
+
 func (bt *BudgetTracker) GetFilteredTransactions(userID string, filters *TransactionList) ([]Transaction, error) {
 	ts, err := bt.storage.GetFilteredTransactions(userID, filters)
 	if err != nil {
@@ -363,20 +382,6 @@ func (bt *BudgetTracker) GetTranscationById(userId string, transactionId string)
 		return Transaction{}, fmt.Errorf("failed to get transaction by id: %w", err)
 	}
 	return t, nil
-}
-
-func (bt *BudgetTracker) DeleteTransaction(userId string, transactionId string) error {
-	tItem, err := bt.storage.GetTransactionById(userId, transactionId)
-	if err != nil {
-		return fmt.Errorf("failed to get transaction's creator: %w", err)
-	}
-	if userId != tItem.CreatedBy {
-		return fmt.Errorf("%w: you are not allowed to delete a transaction you did not create", appErrors.ErrAccessDenied)
-	}
-	if err := bt.storage.DeleteTransaction(userId, transactionId); err != nil {
-		return fmt.Errorf("failed to delete transaction, Transaction-ID: %s, error: %w", transactionId, err)
-	}
-	return nil
 }
 
 func (bt *BudgetTracker) LogoutUser(userId string, token string) error {
