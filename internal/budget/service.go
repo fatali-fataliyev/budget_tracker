@@ -54,6 +54,7 @@ type Storage interface {
 	IsEmailConfirmed(emailAddress string) bool
 	ChangeAmountOfTransaction(userId string, tId string, tType string, amount float64) error
 	UpdateExpenseCategory(userId string, fields UpdateExpenseCategoryRequest) (*ExpenseCategoryResponse, error)
+	DeleteExpenseCategory(userId string, categoryId string) error
 	LogoutUser(userId string, token string) error
 	GetStorageType() string
 }
@@ -374,6 +375,14 @@ func (bt *BudgetTracker) GetFilteredTransactions(userID string, filters *Transac
 		transactions = append(transactions, t)
 	}
 	return transactions, nil
+}
+
+func (bt *BudgetTracker) DeleteExpenseCategory(userId string, categoryId string) error {
+	err := bt.storage.DeleteExpenseCategory(userId, categoryId)
+	if err != nil {
+		return fmt.Errorf("failed to delete expense category: %w", err)
+	}
+	return nil
 }
 
 func (bt *BudgetTracker) GetTranscationById(userId string, transactionId string) (Transaction, error) {

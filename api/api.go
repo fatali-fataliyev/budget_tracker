@@ -417,7 +417,6 @@ func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 }
 
 func (api *Api) UpdateExpenseCategoryHandler(r *iz.Request) iz.Responder {
-	fmt.Println("update")
 	token := r.Header.Get("Authorization")
 	if token == "" {
 		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
@@ -457,6 +456,31 @@ func (api *Api) UpdateExpenseCategoryHandler(r *iz.Request) iz.Responder {
 	categoryList.Categories = make([]ExpenseCategoryResponseItem, 0, 1)
 	categoryList.Categories = append(categoryList.Categories, ExpenseCategoryToHttp(*updatedCategory))
 	return iz.Respond().Status(200).JSON(categoryList)
+}
+
+func (api *Api) DeleteExpenseCategoryHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	var tId string = r.PathValue("id")
+	if tId == "" {
+		msg := fmt.Sprintf("category ID is required")
+		return iz.Respond().Status(400).Text(msg)
+	}
+	if err := api.Service.DeleteExpenseCategory(userId, tId); err != nil {
+		msg := fmt.Sprintf("failed to delete category: %v", err)
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
+	msg := fmt.Sprintf("category successfully deleted")
+	return iz.Respond().Status(200).Text(msg)
 }
 
 func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {

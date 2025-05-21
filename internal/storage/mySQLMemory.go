@@ -556,6 +556,64 @@ func (mySql *MySQLStorage) UpdateExpenseCategory(userID string, filters budget.U
 	return &category, nil
 }
 
+func (mySql *MySQLStorage) getCategoryNameById(userID string, categoryId string) (*string, error) {
+	query := "SELECT name FROM expense_categories WHERE created_by = ? AND id = ?;"
+	row := mySql.db.QueryRow(query, userID, categoryId)
+
+	var name string
+	err := row.Scan(&name)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
+		}
+		return nil, fmt.Errorf("failed to scan category: %w", err)
+	}
+	return &name, nil
+}
+
+func (mySql *MySQLStorage) DeleteExpenseCategory(userId string, categoryId string) error {
+	tx, err := mySql.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start SQL command transaction: %w", err)
+	}
+
+	categoryName, err := mySql.getCategoryNameById(userId, categoryId)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to get category name: %w", err)
+	}
+
+	deleteTxQuery := "DELETE FROM transactions WHERE created_by = ? AND category_name = ? AND category_type = '-';"
+	_, err = tx.Exec(deleteTxQuery, userId, categoryName)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to delete related transactions: %w", err)
+	}
+
+	deleteCategoryQuery := "DELETE FROM expense_categories WHERE created_by = ? AND id = ?;"
+	result, err := tx.Exec(deleteCategoryQuery, userId, categoryId)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to delete category: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to check delete status of category: %w", err)
+	}
+	if rowsAffected == 0 {
+		tx.Rollback()
+		return fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit SQL command transaction: %w", err)
+	}
+
+	return nil
+}
+
 func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budget.TransactionList) ([]budget.Transaction, error) {
 	query := "SELECT id, category_name, amount, currency, created_at, note, created_by, category_type FROM transactions WHERE created_by = ?"
 	args := []interface{}{userID}
