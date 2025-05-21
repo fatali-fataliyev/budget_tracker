@@ -55,6 +55,7 @@ type Storage interface {
 	ChangeAmountOfTransaction(userId string, tId string, tType string, amount float64) error
 	UpdateExpenseCategory(userId string, fields UpdateExpenseCategoryRequest) (*ExpenseCategoryResponse, error)
 	DeleteExpenseCategory(userId string, categoryId string) error
+	UpdateIncomeCategory(userId string, fields UpdateIncomeCategoryRequest) (*IncomeCategoryResponse, error)
 	LogoutUser(userId string, token string) error
 	GetStorageType() string
 }
@@ -218,10 +219,10 @@ func (bt *BudgetTracker) SaveTransaction(userId string, transaction TransactionR
 
 func (bt *BudgetTracker) SaveExpenseCategory(userId string, category ExpenseCategoryRequest) error {
 	if category.MaxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
-		return fmt.Errorf("%w: category max amount is too large; the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
+		return fmt.Errorf("%w: category max amount is too large, the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
 	}
 	if len(category.Name) > MAX_CATEGORY_NAME_LENGTH {
-		return fmt.Errorf("%w: category name is too long for category; the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
+		return fmt.Errorf("%w: category name is too long for category, the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
 	}
 
 	now := time.Now().UTC()
@@ -240,6 +241,7 @@ func (bt *BudgetTracker) SaveExpenseCategory(userId string, category ExpenseCate
 	if err := bt.storage.SaveExpenseCategory(categoryItem); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -355,6 +357,33 @@ func (bt *BudgetTracker) UpdateExpenseCategory(userId string, fields UpdateExpen
 	return category, nil
 }
 
+func (bt *BudgetTracker) UpdateIncomeCategory(userId string, fields UpdateIncomeCategoryRequest) (*IncomeCategoryResponse, error) {
+	if fields.NewTargetAmount > MAX_TARGET_AMOUNT_LIMIT {
+		return nil, fmt.Errorf("%w: category max amount is too large; the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
+	}
+	if len(fields.NewName) > MAX_CATEGORY_NAME_LENGTH {
+		return nil, fmt.Errorf("%w: category name is too long for category; the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
+	}
+	if len(fields.NewNote) > MAX_TRANSACTION_NOTE_LENGTH {
+		return nil, fmt.Errorf("%w: note so long, maximum allowed length is: %d", appErrors.ErrInvalidInput, MAX_TRANSACTION_NOTE_LENGTH)
+	}
+
+	fields.UpdateTime = time.Now().UTC()
+	category, err := bt.storage.UpdateIncomeCategory(userId, fields)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update income category: %w", err)
+	}
+	return category, nil
+}
+
+func (bt *BudgetTracker) DeleteExpenseCategory(userId string, categoryId string) error {
+	err := bt.storage.DeleteExpenseCategory(userId, categoryId)
+	if err != nil {
+		return fmt.Errorf("failed to delete expense category: %w", err)
+	}
+	return nil
+}
+
 func (bt *BudgetTracker) GetFilteredTransactions(userID string, filters *TransactionList) ([]Transaction, error) {
 	ts, err := bt.storage.GetFilteredTransactions(userID, filters)
 	if err != nil {
@@ -375,14 +404,6 @@ func (bt *BudgetTracker) GetFilteredTransactions(userID string, filters *Transac
 		transactions = append(transactions, t)
 	}
 	return transactions, nil
-}
-
-func (bt *BudgetTracker) DeleteExpenseCategory(userId string, categoryId string) error {
-	err := bt.storage.DeleteExpenseCategory(userId, categoryId)
-	if err != nil {
-		return fmt.Errorf("failed to delete expense category: %w", err)
-	}
-	return nil
 }
 
 func (bt *BudgetTracker) GetTranscationById(userId string, transactionId string) (Transaction, error) {

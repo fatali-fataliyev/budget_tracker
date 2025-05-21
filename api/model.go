@@ -54,6 +54,13 @@ type UpdateExpenseCategoryRequest struct {
 	NewNote      string  `json:"new_note"`
 }
 
+type UpdateIncomeCategoryRequest struct {
+	ID              string `json:"id"`
+	NewName         string `json:"new_name"`
+	NewTargetAmount int    `json:"new_target_amount"`
+	NewNote         string `json:"new_note"`
+}
+
 //REQUESTS END:
 
 //RESPONSES:
@@ -95,7 +102,7 @@ type ListExpenseCategories struct {
 	Categories []ExpenseCategoryResponseItem `json:"categories"`
 }
 
-type InomeCategoryResponseItem struct {
+type IncomeCategoryResponseItem struct {
 	ID           string  `json:"id"`
 	Name         string  `json:"name"`
 	Amount       float64 `json:"amount"`
@@ -108,7 +115,7 @@ type InomeCategoryResponseItem struct {
 }
 
 type ListIncomeCategories struct {
-	Categories []InomeCategoryResponseItem `json:"categories"`
+	Categories []IncomeCategoryResponseItem `json:"categories"`
 }
 
 type ListTransactionResponse struct {
@@ -167,9 +174,9 @@ func ExpenseCategoryToHttp(category budget.ExpenseCategoryResponse) ExpenseCateg
 	}
 }
 
-func IncomeCategoryToHttp(category budget.IncomeCategoryResponse) InomeCategoryResponseItem {
+func IncomeCategoryToHttp(category budget.IncomeCategoryResponse) IncomeCategoryResponseItem {
 	fmt.Println(category.TargetAmount)
-	return InomeCategoryResponseItem{
+	return IncomeCategoryResponseItem{
 		ID:           category.ID,
 		Name:         category.Name,
 		Amount:       category.Amount,

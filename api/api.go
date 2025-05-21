@@ -137,7 +137,6 @@ func (api *Api) SaveExpenseCategoryHandler(r *iz.Request) iz.Responder {
 
 	msg := fmt.Sprintf("category successfully created")
 	return iz.Respond().Status(201).Text(msg)
-
 }
 
 func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
@@ -207,7 +206,7 @@ func (api *Api) GetFilteredIncomeCategoriesHandler(r *iz.Request) iz.Responder {
 		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
 	}
 	var categoryList ListIncomeCategories
-	categoryList.Categories = make([]InomeCategoryResponseItem, 0, len(categories))
+	categoryList.Categories = make([]IncomeCategoryResponseItem, 0, len(categories))
 	for _, c := range categories {
 		categoryList.Categories = append(categoryList.Categories, IncomeCategoryToHttp(c))
 	}
@@ -481,6 +480,48 @@ func (api *Api) DeleteExpenseCategoryHandler(r *iz.Request) iz.Responder {
 	}
 	msg := fmt.Sprintf("category successfully deleted")
 	return iz.Respond().Status(200).Text(msg)
+}
+
+func (api *Api) UpdateIncomeCategoryHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	var updateIncCategoryReq UpdateIncomeCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&updateIncCategoryReq); err != nil {
+		msg := fmt.Sprintf("failed to parse income category request: %v", err)
+		return iz.Respond().Status(500).Text(msg)
+	}
+
+	if updateIncCategoryReq.NewName == "" {
+		msg := fmt.Sprintf("category name is required")
+		return iz.Respond().Status(400).Text(msg)
+	}
+
+	updateIncCategoryItem := budget.UpdateIncomeCategoryRequest{
+		ID:              updateIncCategoryReq.ID,
+		NewName:         updateIncCategoryReq.NewName,
+		NewTargetAmount: updateIncCategoryReq.NewTargetAmount,
+		NewNote:         updateIncCategoryReq.NewNote,
+	}
+
+	updatedCategory, err := api.Service.UpdateIncomeCategory(userId, updateIncCategoryItem)
+	if err != nil {
+		msg := fmt.Sprintf("failed to update category: %v", err)
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
+
+	var categoryList ListIncomeCategories
+	categoryList.Categories = make([]IncomeCategoryResponseItem, 0, 1)
+	categoryList.Categories = append(categoryList.Categories, IncomeCategoryToHttp(*updatedCategory))
+	return iz.Respond().Status(200).JSON(categoryList)
 }
 
 func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {

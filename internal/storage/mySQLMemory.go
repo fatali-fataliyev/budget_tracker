@@ -73,11 +73,12 @@ func (mySql *MySQLStorage) SaveExpenseCategory(category budget.ExpenseCategory) 
 		query := "INSERT INTO expense_categories (id, name, max_amount, period_day, created_at, updated_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
 		_, err := mySql.db.Exec(query, category.ID, category.Name, category.MaxAmount, category.PeriodDay, category.CreatedAt, category.UpdatedAt, category.Note, category.CreatedBy)
 		if err != nil {
-			if mysqlErr, ok := err.(*mysql.MySQLError); ok {
-				if mysqlErr.Number == 1062 {
-					return fmt.Errorf("%w: this category already exist", appErrors.ErrConflict)
-				}
-			}
+			fmt.Println("Error when saving category: ", category)
+			// if mysqlErr, ok := err.(*mysql.MySQLError); ok {
+			// 	if mysqlErr.Number == 1062 {
+			// 		return fmt.Errorf("%w: this category already exist", appErrors.ErrConflict)
+			// 	}
+			// }
 			return fmt.Errorf("failed to save category: %w", err)
 		}
 		return nil
@@ -509,9 +510,6 @@ func (mySql *MySQLStorage) CheckExpenseCategoryUpdateAccess(userID string, categ
 		return fmt.Errorf("failed to scan category: %w", err)
 	}
 
-	if id == "" {
-		return fmt.Errorf("%w: you cannot change others' expense categories.", appErrors.ErrAccessDenied)
-	}
 	return nil
 }
 
@@ -554,6 +552,29 @@ func (mySql *MySQLStorage) UpdateExpenseCategory(userID string, filters budget.U
 	category.Amount = categoryAmount
 
 	return &category, nil
+}
+
+func (mySql *MySQLStorage) CheckIncomeCategoryUpdateAccess(userID string, categoryId string) error {
+	query := "SELECT id FROM income_categories WHERE created_by = ? AND id = ?;"
+	row := mySql.db.QueryRow(query, userID, categoryId)
+
+	var id string
+	err := row.Scan(&id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
+		}
+		return fmt.Errorf("failed to scan category: %w", err)
+	}
+
+	if id == "" {
+		return fmt.Errorf("%w: you cannot change others' income categories.", appErrors.ErrAccessDenied)
+	}
+	return nil
+}
+
+func (mySql *MySQLStorage) UpdateIncomeCategory(userID string, filters budget.UpdateIncomeCategoryRequest) (*budget.IncomeCategoryResponse, error) {
+	return nil, nil
 }
 
 func (mySql *MySQLStorage) getCategoryNameById(userID string, categoryId string) (*string, error) {

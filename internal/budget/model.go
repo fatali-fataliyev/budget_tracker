@@ -37,6 +37,14 @@ type UpdateExpenseCategoryRequest struct {
 	UpdateTime   time.Time
 }
 
+type UpdateIncomeCategoryRequest struct {
+	ID              string
+	NewName         string
+	NewTargetAmount int
+	NewNote         string
+	UpdateTime      time.Time
+}
+
 // REQUESTS END:
 
 // MODELS:

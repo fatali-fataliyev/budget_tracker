@@ -37,18 +37,30 @@ func main() {
 	server := http.NewServeMux()
 	api := api.NewApi(&bt)
 
+	// USER ENDPOINT START.
 	server.HandleFunc("POST /register", iz.Bind(api.SaveUserHandler))
 	server.HandleFunc("POST /login", iz.Bind(api.LoginUserHandler))
 	server.HandleFunc("POST /logout", iz.Bind(api.LogoutUserHandler))
+	// USER ENDPOINT END.
+
+	// TRANSACTION ENDPOINT START.
 	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))
-	server.HandleFunc("POST /category/expense", iz.Bind(api.SaveExpenseCategoryHandler))
-	server.HandleFunc("PUT /category/expense", iz.Bind(api.UpdateExpenseCategoryHandler))
-	server.HandleFunc("DELETE /category/expense/{id}", iz.Bind(api.DeleteExpenseCategoryHandler))
-	server.HandleFunc("GET /category/expense", iz.Bind(api.GetFilteredExpenseCategoriesHandler))
-	server.HandleFunc("POST /category/income", iz.Bind(api.SaveIncomeCategoryHandler))
-	server.HandleFunc("GET /category/income", iz.Bind(api.GetFilteredIncomeCategoriesHandler))
 	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler))
 	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler))
+	// TRANSACTION ENDPOINT END.
+
+	// EXPENSE CATEGORY ENDPOINT START.
+	server.HandleFunc("POST /category/expense", iz.Bind(api.SaveExpenseCategoryHandler))
+	server.HandleFunc("GET /category/expense", iz.Bind(api.GetFilteredExpenseCategoriesHandler))
+	server.HandleFunc("PUT /category/expense", iz.Bind(api.UpdateExpenseCategoryHandler))
+	server.HandleFunc("DELETE /category/expense/{id}", iz.Bind(api.DeleteExpenseCategoryHandler))
+	// EXPENSE CATEGORY ENDPOINT END.
+
+	// INCOME CATEGORY ENDPOINT START.
+	server.HandleFunc("POST /category/income", iz.Bind(api.SaveIncomeCategoryHandler))
+	server.HandleFunc("GET /category/income", iz.Bind(api.GetFilteredIncomeCategoriesHandler))
+	server.HandleFunc("PUT /category/income", iz.Bind(api.UpdateIncomeCategoryHandler))
+	// server.HandleFunc("DELETE /category/income/{id}", iz.Bind(api.DeleteIncomeCategoryHandler))
 
 	fmt.Println("server is running")
 	port := "8080"
