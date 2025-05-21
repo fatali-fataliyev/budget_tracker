@@ -416,6 +416,49 @@ func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(200).JSON(transactionList)
 }
 
+func (api *Api) UpdateExpenseCategoryHandler(r *iz.Request) iz.Responder {
+	fmt.Println("update")
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	var updateExpCategoryReq UpdateExpenseCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&updateExpCategoryReq); err != nil {
+		msg := fmt.Sprintf("failed to parse save category request: %v", err)
+		return iz.Respond().Status(500).Text(msg)
+	}
+
+	if updateExpCategoryReq.NewName == "" {
+		msg := fmt.Sprintf("category name is required")
+		return iz.Respond().Status(400).Text(msg)
+	}
+
+	updateExpCategoryItem := budget.UpdateExpenseCategoryRequest{
+		ID:           updateExpCategoryReq.ID,
+		NewName:      updateExpCategoryReq.NewName,
+		NewMaxAmount: updateExpCategoryReq.NewMaxAmount,
+		NewPeriodDay: updateExpCategoryReq.NewPeriodDay,
+		NewNote:      updateExpCategoryReq.NewNote,
+	}
+
+	updatedCategory, err := api.Service.UpdateExpenseCategory(userId, updateExpCategoryItem)
+	if err != nil {
+		msg := fmt.Sprintf("failed to update category: %v", err)
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
+	var categoryList ListExpenseCategories
+	categoryList.Categories = make([]ExpenseCategoryResponseItem, 0, 1)
+	categoryList.Categories = append(categoryList.Categories, ExpenseCategoryToHttp(*updatedCategory))
+	return iz.Respond().Status(200).JSON(categoryList)
+}
+
 func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
 	var loginRequest UserLoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&loginRequest); err != nil {

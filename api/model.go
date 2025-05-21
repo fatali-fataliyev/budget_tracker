@@ -46,6 +46,14 @@ type IncomeCategoryRequest struct {
 	Note         string `json:"note"`
 }
 
+type UpdateExpenseCategoryRequest struct {
+	ID           string  `json:"id"`
+	NewName      string  `json:"new_name"`
+	NewMaxAmount float64 `json:"new_max_amount"`
+	NewPeriodDay int     `json:"new_period_day"`
+	NewNote      string  `json:"new_note"`
+}
+
 //REQUESTS END:
 
 //RESPONSES:

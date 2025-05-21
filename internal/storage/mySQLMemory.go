@@ -496,6 +496,66 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(userID string, filters *
 	return categories, nil
 }
 
+func (mySql *MySQLStorage) CheckExpenseCategoryUpdateAccess(userID string, categoryId string) error {
+	query := "SELECT id FROM expense_categories WHERE created_by = ? AND id = ?;"
+	row := mySql.db.QueryRow(query, userID, categoryId)
+
+	var id string
+	err := row.Scan(&id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
+		}
+		return fmt.Errorf("failed to scan category: %w", err)
+	}
+
+	if id == "" {
+		return fmt.Errorf("%w: you cannot change others' expense categories.", appErrors.ErrAccessDenied)
+	}
+	return nil
+}
+
+func (mySql *MySQLStorage) UpdateExpenseCategory(userID string, filters budget.UpdateExpenseCategoryRequest) (*budget.ExpenseCategoryResponse, error) {
+	err := mySql.CheckExpenseCategoryUpdateAccess(userID, filters.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := "UPDATE expense_categories SET name = ?, max_amount = ?, period_day = ?, updated_at = ?, note = ? WHERE created_by = ? AND id = ?;"
+	_, err = mySql.db.Exec(query, filters.NewName, filters.NewMaxAmount, filters.NewPeriodDay, filters.UpdateTime, filters.NewNote, userID, filters.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update category: %w", err)
+	}
+
+	query = "SELECT id, name, max_amount, period_day, created_at, updated_at, note, created_by FROM expense_categories WHERE created_by = ? AND id = ?;"
+	row := mySql.db.QueryRow(query, userID, filters.ID)
+
+	var category budget.ExpenseCategoryResponse
+	var createdAt string
+	var updatedAt string
+
+	err = row.Scan(&category.ID, &category.Name, &category.MaxAmount, &category.PeriodDay, &createdAt, &updatedAt, &category.Note, &category.CreatedBy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan category: %w", err)
+	}
+	category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse created_at: %w", err)
+	}
+	category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse updated_at: %w", err)
+	}
+
+	categoryAmount, err := mySql.GetTotalAmountOfTransactions(userID, category.Name, "-")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total amount of transactions: %w", err)
+	}
+	category.Amount = categoryAmount
+
+	return &category, nil
+}
+
 func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budget.TransactionList) ([]budget.Transaction, error) {
 	query := "SELECT id, category_name, amount, currency, created_at, note, created_by, category_type FROM transactions WHERE created_by = ?"
 	args := []interface{}{userID}
