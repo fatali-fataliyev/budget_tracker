@@ -350,11 +350,32 @@ func (bt *BudgetTracker) UpdateExpenseCategory(userId string, fields UpdateExpen
 	}
 
 	fields.UpdateTime = time.Now().UTC()
-	category, err := bt.storage.UpdateExpenseCategory(userId, fields)
+	categoryRaw, err := bt.storage.UpdateExpenseCategory(userId, fields)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update expense category: %w", err)
 	}
-	return category, nil
+	var usagePercent int
+	if categoryRaw.MaxAmount > 0 {
+		usagePercent = int((categoryRaw.Amount / categoryRaw.MaxAmount) * 100)
+	}
+
+	isExpired := time.Now().UTC().After(categoryRaw.CreatedAt.AddDate(0, 0, categoryRaw.PeriodDay))
+
+	category := ExpenseCategoryResponse{
+		ID:           categoryRaw.ID,
+		Name:         categoryRaw.Name,
+		Amount:       categoryRaw.Amount,
+		MaxAmount:    categoryRaw.MaxAmount,
+		PeriodDay:    categoryRaw.PeriodDay,
+		UsagePercent: usagePercent,
+		CreatedAt:    categoryRaw.CreatedAt,
+		UpdatedAt:    categoryRaw.UpdatedAt,
+		Note:         categoryRaw.Note,
+		CreatedBy:    categoryRaw.CreatedBy,
+		IsExpired:    isExpired,
+	}
+
+	return &category, nil
 }
 
 func (bt *BudgetTracker) UpdateIncomeCategory(userId string, fields UpdateIncomeCategoryRequest) (*IncomeCategoryResponse, error) {
@@ -373,6 +394,12 @@ func (bt *BudgetTracker) UpdateIncomeCategory(userId string, fields UpdateIncome
 	if err != nil {
 		return nil, fmt.Errorf("failed to update income category: %w", err)
 	}
+
+	var usagePercent int
+	if category.TargetAmount > 0 {
+		usagePercent = int((category.Amount / category.TargetAmount) * 100)
+	}
+	category.UsagePercent = usagePercent
 	return category, nil
 }
 

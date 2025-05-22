@@ -524,6 +524,31 @@ func (api *Api) UpdateIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	return iz.Respond().Status(200).JSON(categoryList)
 }
 
+func (api *Api) DeleteIncomeCategoryHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	var tId string = r.PathValue("id")
+	if tId == "" {
+		msg := fmt.Sprintf("category ID is required")
+		return iz.Respond().Status(400).Text(msg)
+	}
+	if err := api.Service.DeleteExpenseCategory(userId, tId); err != nil {
+		msg := fmt.Sprintf("failed to delete category: %v", err)
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
+	msg := fmt.Sprintf("category successfully deleted")
+	return iz.Respond().Status(200).Text(msg)
+}
+
 func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
 	var loginRequest UserLoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&loginRequest); err != nil {

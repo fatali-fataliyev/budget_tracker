@@ -60,13 +60,14 @@ func main() {
 	server.HandleFunc("POST /category/income", iz.Bind(api.SaveIncomeCategoryHandler))
 	server.HandleFunc("GET /category/income", iz.Bind(api.GetFilteredIncomeCategoriesHandler))
 	server.HandleFunc("PUT /category/income", iz.Bind(api.UpdateIncomeCategoryHandler))
-	// server.HandleFunc("DELETE /category/income/{id}", iz.Bind(api.DeleteIncomeCategoryHandler))
+	server.HandleFunc("DELETE /category/income/{id}", iz.Bind(api.DeleteIncomeCategoryHandler))
 
-	fmt.Println("server is running")
 	port := "8080"
+	fmt.Println("Starting server on port", port)
 	err = http.ListenAndServe(":"+port, server)
 	if err != nil {
 		logging.Logger.Errorf("failed to start server: %v", err)
+		fmt.Println("failed to start server: %w", err)
 		return
 	}
 }
