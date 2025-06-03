@@ -2,6 +2,8 @@
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
 #
 # Binaries for programs and plugins
+tmp/main
+tmp/
 app
 *.exe
 *.exe~
@@ -25,5 +27,6 @@ go.work.sum
 
 # env file
 .env
-local
-logging/logs
+local/
+logging/logs/
+.air.toml

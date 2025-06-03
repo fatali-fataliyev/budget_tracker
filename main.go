@@ -19,16 +19,19 @@ func main() {
 		fmt.Println("failed to initalize logger: %w", err)
 		return
 	}
-	logging.Logger.Info("Application started")
+	logging.Logger.Info("application starting")
 
 	db, err := storage.Init()
 	if err != nil {
 		logging.Logger.Errorf("failed to initalize database: %v", err)
+		fmt.Println("failed to initalize database")
 		return
 	}
+
 	storageInstance := storage.NewMySQLStorage(db)
 	if storageInstance == nil {
 		logging.Logger.Errorf("failed to create instance of database: %v", err)
+		fmt.Println("failed to create storage instance")
 		return
 	}
 
@@ -37,22 +40,37 @@ func main() {
 	server := http.NewServeMux()
 	api := api.NewApi(&bt)
 
-	server.HandleFunc("POST /register", iz.Bind(api.SaveUserHandler))
-	server.HandleFunc("POST /login", iz.Bind(api.LoginUserHandler))
-	server.HandleFunc("POST /logout", iz.Bind(api.LogoutUserHandler))
-	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))
-	server.HandleFunc("POST /process-image", iz.Bind(api.ImageToTransactionHandler))
-	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler))
-	server.HandleFunc("GET /total", iz.Bind(api.GetTotals))
-	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler))
-	server.HandleFunc("PUT /transaction/{id}", iz.Bind(api.UpdateTransactionHandler))
-	server.HandleFunc("DELETE /transaction/{id}", iz.Bind(api.DeleteTransactionHandler))
+	// USER ENDPOINT START.
+	server.HandleFunc("POST /register", iz.Bind(api.SaveUserHandler)) // Create User
+	server.HandleFunc("POST /login", iz.Bind(api.LoginUserHandler))   // Login User
+	server.HandleFunc("POST /logout", iz.Bind(api.LogoutUserHandler)) // Logout User
+	// USER ENDPOINT END.
 
-	fmt.Println("server is running")
+	// TRANSACTION ENDPOINT START.
+	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))        // Create Transaction
+	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler)) // Get Transactions with filters
+	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler)) // Get transation by ID.
+	// TRANSACTION ENDPOINT END.
+
+	// EXPENSE CATEGORY ENDPOINT START.
+	server.HandleFunc("POST /category/expense", iz.Bind(api.SaveExpenseCategoryHandler))          // Create Expense Category
+	server.HandleFunc("GET /category/expense", iz.Bind(api.GetFilteredExpenseCategoriesHandler))  // Get Expense Categories with filters
+	server.HandleFunc("PUT /category/expense", iz.Bind(api.UpdateExpenseCategoryHandler))         // Update Expense Category
+	server.HandleFunc("DELETE /category/expense/{id}", iz.Bind(api.DeleteExpenseCategoryHandler)) // Delete Expense Category
+	// EXPENSE CATEGORY ENDPOINT END.
+
+	// INCOME CATEGORY ENDPOINT START.
+	server.HandleFunc("POST /category/income", iz.Bind(api.SaveIncomeCategoryHandler))          // Create Income Category
+	server.HandleFunc("GET /category/income", iz.Bind(api.GetFilteredIncomeCategoriesHandler))  // Get Income Categories with filters
+	server.HandleFunc("PUT /category/income", iz.Bind(api.UpdateIncomeCategoryHandler))         // Update Income Category
+	server.HandleFunc("DELETE /category/income/{id}", iz.Bind(api.DeleteIncomeCategoryHandler)) // Delete Income Category
+
 	port := "8080"
+	fmt.Println("Starting server on port", port)
 	err = http.ListenAndServe(":"+port, server)
 	if err != nil {
 		logging.Logger.Errorf("failed to start server: %v", err)
+		fmt.Println("failed to start server")
 		return
 	}
 }

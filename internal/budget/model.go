@@ -1,74 +1,137 @@
 package budget
 
 import (
-	"fmt"
-	"net/url"
 	"time"
 )
 
+// REQUESTS START:
+type ExpenseCategoryRequest struct {
+	Name      string
+	MaxAmount float64
+	PeriodDay int
+	Note      string
+	Type      string
+}
+
+type IncomeCategoryRequest struct {
+	Name         string
+	TargetAmount int
+	Note         string
+	Type         string
+}
+
+type TransactionRequest struct {
+	CategoryName string
+	CategoryType string
+	Amount       float64
+	Currency     string
+	Note         string
+}
+
+type UpdateExpenseCategoryRequest struct {
+	ID           string
+	NewName      string
+	NewMaxAmount float64
+	NewPeriodDay int
+	NewNote      string
+	UpdateTime   time.Time
+}
+
+type UpdateIncomeCategoryRequest struct {
+	ID              string
+	NewName         string
+	NewTargetAmount int
+	NewNote         string
+	UpdateTime      time.Time
+}
+
+// REQUESTS END:
+
+// MODELS:
+
+type ExpenseCategory struct {
+	ID        string
+	Name      string
+	MaxAmount float64
+	PeriodDay int
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Note      string
+	CreatedBy string
+	Type      string
+}
+
+type IncomeCategory struct {
+	ID           string
+	Name         string
+	TargetAmount int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Note         string
+	CreatedBy    string
+	Type         string
+}
+
 type Transaction struct {
 	ID           string
+	CategoryName string
+	CategoryType string
 	Amount       float64
-	Limit        float64
-	UsagePercent int
 	Currency     string
-	Category     string
-	CreatedDate  time.Time
-	UpdatedDate  time.Time
-	Type         string
+	CreatedAt    time.Time
+	Note         string
 	CreatedBy    string
 }
 
-type UpdateTransactionItem struct {
-	ID          string
-	Amount      float64
-	Limit       float64
-	Currency    string
-	Category    string
-	UpdatedDate time.Time
-	Type        string
+// RESPONSES:
+type ExpenseCategoryResponse struct {
+	ID           string
+	Name         string
+	Amount       float64
+	MaxAmount    float64
+	PeriodDay    int
+	IsExpired    bool
+	UsagePercent int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Note         string
+	CreatedBy    string
 }
 
-type GetTotals struct {
-	Type     string
-	Currency string
-	Total    float64
+type IncomeCategoryResponse struct {
+	ID           string
+	Name         string
+	Amount       float64
+	TargetAmount float64
+	UsagePercent int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Note         string
+	CreatedBy    string
 }
 
-func (list *GetTotals) GetTotalValidate(params url.Values) (*GetTotals, error) {
-	filters := GetTotals{}
-	typeRaw := params.Get("type")
-	currencyRaw := params.Get("currency")
-
-	var tType string
-	var currency string
-	if typeRaw != "" {
-		if typeRaw == "income" {
-			tType = "+"
-		} else if typeRaw == "expense" {
-			tType = "-"
-		} else {
-			return nil, fmt.Errorf("invalid transaction type")
-		}
-	} else {
-		return nil, fmt.Errorf("type is required")
-	}
-	if currencyRaw != "" {
-		currency = currencyRaw
-	} else {
-		return nil, fmt.Errorf("currency is requried")
-	}
-
-	filters.Type = tType
-	filters.Currency = currency
-
-	return &filters, nil
+type IncomeCategoryList struct {
+	Names        []string
+	TargetAmount float64
+	CreatedAt    time.Time
+	EndDate      time.Time
+	IsAllNil     bool
 }
 
-type ListTransactionsFilters struct {
-	Categories []string
-	Type       *string
-	MinAmount  *float64
-	MaxAmount  *float64
-	IsAllNil   bool
+type ExpenseCategoryList struct {
+	Names     []string
+	MaxAmount float64
+	PeriodDay int
+	CreatedAt time.Time
+	EndDate   time.Time
+	IsAllNil  bool
+}
+
+type TransactionList struct {
+	CategoryNames []string
+	Amount        float64
+	Currency      string
+	CreatedAt     time.Time
+	Type          string
+	IsAllNil      bool
 }
