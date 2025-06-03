@@ -28,6 +28,23 @@ type TransactionRequest struct {
 	Note         string
 }
 
+type UpdateExpenseCategoryRequest struct {
+	ID           string
+	NewName      string
+	NewMaxAmount float64
+	NewPeriodDay int
+	NewNote      string
+	UpdateTime   time.Time
+}
+
+type UpdateIncomeCategoryRequest struct {
+	ID              string
+	NewName         string
+	NewTargetAmount int
+	NewNote         string
+	UpdateTime      time.Time
+}
+
 // REQUESTS END:
 
 // MODELS:

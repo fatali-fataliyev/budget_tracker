@@ -16,6 +16,7 @@ import (
 // REQUESTS START:
 type CreateTransactionRequest struct {
 	CategoryName string  `json:"category_name"`
+	CategoryType string  `json:"category_type"`
 	Amount       float64 `json:"amount"`
 	Currency     string  `json:"currency"`
 	Note         string  `json:"note"`
@@ -46,6 +47,21 @@ type IncomeCategoryRequest struct {
 	Note         string `json:"note"`
 }
 
+type UpdateExpenseCategoryRequest struct {
+	ID           string  `json:"id"`
+	NewName      string  `json:"new_name"`
+	NewMaxAmount float64 `json:"new_max_amount"`
+	NewPeriodDay int     `json:"new_period_day"`
+	NewNote      string  `json:"new_note"`
+}
+
+type UpdateIncomeCategoryRequest struct {
+	ID              string `json:"id"`
+	NewName         string `json:"new_name"`
+	NewTargetAmount int    `json:"new_target_amount"`
+	NewNote         string `json:"new_note"`
+}
+
 //REQUESTS END:
 
 //RESPONSES:
@@ -69,6 +85,9 @@ type TransactionItem struct {
 	Type         string  `json:"category_type"`
 	CreatedBy    string  `json:"created_by"`
 }
+type ListTransactionResponse struct {
+	Transactions []TransactionItem `json:"transactions"`
+}
 
 type ExpenseCategoryResponseItem struct {
 	ID           string  `json:"id"`
@@ -87,7 +106,7 @@ type ListExpenseCategories struct {
 	Categories []ExpenseCategoryResponseItem `json:"categories"`
 }
 
-type InomeCategoryResponseItem struct {
+type IncomeCategoryResponseItem struct {
 	ID           string  `json:"id"`
 	Name         string  `json:"name"`
 	Amount       float64 `json:"amount"`
@@ -100,17 +119,7 @@ type InomeCategoryResponseItem struct {
 }
 
 type ListIncomeCategories struct {
-	Categories []InomeCategoryResponseItem `json:"categories"`
-}
-
-type ListTransactionResponse struct {
-	Transactions []TransactionItem `json:"transactions"`
-}
-
-type GetTotalsResponse struct {
-	Currency string  `json:"currency"`
-	Type     string  `json:"type"`
-	Total    float64 `json:"total"`
+	Categories []IncomeCategoryResponseItem `json:"categories"`
 }
 
 func httpStatusFromError(err error) int {
@@ -159,9 +168,8 @@ func ExpenseCategoryToHttp(category budget.ExpenseCategoryResponse) ExpenseCateg
 	}
 }
 
-func IncomeCategoryToHttp(category budget.IncomeCategoryResponse) InomeCategoryResponseItem {
-	fmt.Println(category.TargetAmount)
-	return InomeCategoryResponseItem{
+func IncomeCategoryToHttp(category budget.IncomeCategoryResponse) IncomeCategoryResponseItem {
+	return IncomeCategoryResponseItem{
 		ID:           category.ID,
 		Name:         category.Name,
 		Amount:       category.Amount,

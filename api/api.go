@@ -66,18 +66,13 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 
 	var newTransactionReq CreateTransactionRequest
 	if err := json.NewDecoder(r.Body).Decode(&newTransactionReq); err != nil {
-		logging.Logger.Errorf("Failed to parse save transaction request: %v", err)
 		msg := fmt.Sprintf("failed to parse save transaction request: %v", err)
 		return iz.Respond().Status(500).Text(msg)
 	}
 
-	if err != nil {
-		msg := fmt.Sprintf("failed to convert amount: %v", err)
-		return iz.Respond().Status(400).Text(msg)
-	}
-
 	newTransaction := budget.TransactionRequest{
 		CategoryName: newTransactionReq.CategoryName,
+		CategoryType: newTransactionReq.CategoryType,
 		Amount:       newTransactionReq.Amount,
 		Currency:     newTransactionReq.Currency,
 		Note:         newTransactionReq.Note,
@@ -106,7 +101,7 @@ func (api *Api) SaveExpenseCategoryHandler(r *iz.Request) iz.Responder {
 
 	var newExpCategoryReq ExpenseCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&newExpCategoryReq); err != nil {
-		msg := fmt.Sprintf("failed to parse save category request: %v", err)
+		msg := fmt.Sprintf("failed to parse expense category request: %v", err)
 		return iz.Respond().Status(500).Text(msg)
 	}
 
@@ -137,7 +132,6 @@ func (api *Api) SaveExpenseCategoryHandler(r *iz.Request) iz.Responder {
 
 	msg := fmt.Sprintf("category successfully created")
 	return iz.Respond().Status(201).Text(msg)
-
 }
 
 func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
@@ -155,7 +149,7 @@ func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
 
 	var newIncCategoryReq IncomeCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&newIncCategoryReq); err != nil {
-		msg := fmt.Sprintf("failed to parse save category request: %v", err)
+		msg := fmt.Sprintf("failed to parse income category request: %v", err)
 		return iz.Respond().Status(500).Text(msg)
 	}
 
@@ -207,13 +201,12 @@ func (api *Api) GetFilteredIncomeCategoriesHandler(r *iz.Request) iz.Responder {
 		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
 	}
 	var categoryList ListIncomeCategories
-	categoryList.Categories = make([]InomeCategoryResponseItem, 0, len(categories))
+	categoryList.Categories = make([]IncomeCategoryResponseItem, 0, len(categories))
 	for _, c := range categories {
 		categoryList.Categories = append(categoryList.Categories, IncomeCategoryToHttp(c))
 	}
 
 	return iz.Respond().Status(200).JSON(categoryList)
-
 }
 
 func (api *Api) GetFilteredExpenseCategoriesHandler(r *iz.Request) iz.Responder {
@@ -248,7 +241,6 @@ func (api *Api) GetFilteredExpenseCategoriesHandler(r *iz.Request) iz.Responder 
 	}
 
 	return iz.Respond().Status(200).JSON(categoryList)
-
 }
 
 func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
@@ -276,117 +268,15 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 	if err != nil {
 		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
 	}
+
 	var transactionList ListTransactionResponse
 	transactionList.Transactions = make([]TransactionItem, 0, len(transactions))
 
 	for _, transaction := range transactions {
 		transactionList.Transactions = append(transactionList.Transactions, TransactionToHttp(transaction))
 	}
+
 	return iz.Respond().Status(200).JSON(transactionList)
-}
-
-func (api *Api) GetFilteredCategoriesHandler(r *iz.Request) iz.Responder {
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
-		return iz.Respond().Status(401).Text(msg)
-	}
-
-	// userId, err := api.Service.CheckSession(token)
-	// if err != nil {
-	msg := fmt.Sprintf("authorization failed: %s", "test")
-	return iz.Respond().Status(401).Text(msg)
-	//}
-
-	// params := r.URL.Query()
-
-	// filters, err := CategoriesListValidateParams(params)
-	// if err != nil {
-	// msg := fmt.Sprintf("invalid filter parameteres: %s", err.Error())
-	// return iz.Respond().Status(400).Text(msg)
-	// }
-
-	// _, err = api.Service.(userId, filters)
-	// if err != nil {
-	// 	logging.Logger.Errorf("Failed to get filtered categories: %v", err)
-	// 	msg := fmt.Sprintf("failed to get filtered categories: %v", err.Error())
-	// 	return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
-	// }
-
-	// categoriesForHttp := make([]CategoryItem, 0, len(categories))
-
-	// for _, category := range categories {
-	// 	categoryForHttp := CategoryToHttp(category)
-	// 	categoriesForHttp = append(categoriesForHttp, categoryForHttp)
-	// }
-	// fmt.Println(filters)
-
-	// return iz.Respond().Status(200).JSON(categoriesForHttp
-	// return iz.Respond().Status(200).JSON("success")
-}
-
-func (api *Api) GetTotals(r *iz.Request) iz.Responder {
-	// token := r.Header.Get("Authorization")
-	// if token == "" {
-	// 	msg := fmt.Sprintf("authorization failed: Authorization header is required.")
-	// 	return iz.Respond().Status(401).Text(msg)
-	// }
-
-	// userId, err := api.Service.CheckSession(token)
-	// if err != nil {
-	// 	msg := fmt.Sprintf("authorization failed: %s", err.Error())
-	// 	return iz.Respond().Status(401).Text(msg)
-	// }
-
-	// params := r.URL.Query()
-
-	// filters := &budget.GetTotals{}
-	// filterFields, err := filters.GetTotalValidate(params)
-	// if err != nil {
-	// 	msg := fmt.Sprintf("invalid parameters: %s", err.Error())
-	// 	return iz.Respond().Status(400).Text(msg)
-	// }
-
-	// result, err := api.Service.(userId, *filterFields)
-	// if err != nil {
-	// 	logging.Logger.Errorf("Failed to get total by type and currency request: %v", err)
-	// 	msg := fmt.Sprintf("failed to get totals by type and currency")
-	// 	return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
-	// }
-
-	// resultForHttp := GetTotalsResponse{
-	// 	Currency: result.Currency,
-	// 	Type:     result.Type,
-	// 	Total:    result.Total,
-	// }
-	return iz.Respond().Status(200).JSON("")
-}
-
-func (api *Api) GetCategoryByNameHandler(r *iz.Request) iz.Responder {
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
-		return iz.Respond().Status(401).Text(msg)
-	}
-
-	userId, err := api.Service.CheckSession(token)
-	if err != nil {
-		msg := fmt.Sprintf("authorization failed: %s", err.Error())
-		return iz.Respond().Status(401).Text(msg)
-	}
-
-	_ = userId
-
-	// cName := r.PathValue("name")
-
-	// t, err := api.Service.GetCategoryByName(userId, tId)
-	if err != nil {
-		logging.Logger.Errorf("Failed to get transaction by Id request: %v", err)
-		msg := fmt.Sprintf("failed to get transaction by ID: %s", err.Error())
-		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
-	}
-	// tForHttp := TransactionToHttp()
-	return iz.Respond().Status(403).JSON("failed")
 }
 
 func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
@@ -402,18 +292,161 @@ func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 		return iz.Respond().Status(401).Text(msg)
 	}
 
-	tId := r.PathValue("id")
+	txnId := r.PathValue("id")
 
-	t, err := api.Service.GetTranscationById(userId, tId)
+	txn, err := api.Service.GetTranscationById(userId, txnId)
 	if err != nil {
-		logging.Logger.Errorf("failed to get transaction by Id request: %v", err)
-		msg := fmt.Sprintf("failed to get transaction by ID: %s", err.Error())
+		logging.Logger.Errorf("failed to get transaction by id request: %v", err)
+		msg := fmt.Sprintf("failed to get transaction by id: %s", err.Error())
 		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
 	}
+
 	var transactionList ListTransactionResponse
 	transactionList.Transactions = make([]TransactionItem, 0, 1)
-	transactionList.Transactions = append(transactionList.Transactions, TransactionToHttp(t))
+	transactionList.Transactions = append(transactionList.Transactions, TransactionToHttp(txn))
+
 	return iz.Respond().Status(200).JSON(transactionList)
+}
+
+func (api *Api) UpdateExpenseCategoryHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	var updateExpCategoryReq UpdateExpenseCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&updateExpCategoryReq); err != nil {
+		msg := fmt.Sprintf("failed to parse expense category update request: %v", err)
+		return iz.Respond().Status(500).Text(msg)
+	}
+
+	if updateExpCategoryReq.NewName == "" {
+		msg := fmt.Sprintf("category name is required")
+		return iz.Respond().Status(400).Text(msg)
+	}
+
+	updateExpCategoryItem := budget.UpdateExpenseCategoryRequest{
+		ID:           updateExpCategoryReq.ID,
+		NewName:      updateExpCategoryReq.NewName,
+		NewMaxAmount: updateExpCategoryReq.NewMaxAmount,
+		NewPeriodDay: updateExpCategoryReq.NewPeriodDay,
+		NewNote:      updateExpCategoryReq.NewNote,
+	}
+
+	updatedCategory, err := api.Service.UpdateExpenseCategory(userId, updateExpCategoryItem)
+	if err != nil {
+		msg := fmt.Sprintf("failed to update expense category: %v", err)
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
+
+	var categoryList ListExpenseCategories
+	categoryList.Categories = make([]ExpenseCategoryResponseItem, 0, 1)
+	categoryList.Categories = append(categoryList.Categories, ExpenseCategoryToHttp(*updatedCategory))
+
+	return iz.Respond().Status(200).JSON(categoryList)
+}
+
+func (api *Api) DeleteExpenseCategoryHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	var txnId string = r.PathValue("id")
+	if txnId == "" {
+		msg := fmt.Sprintf("category ID is required")
+		return iz.Respond().Status(400).Text(msg)
+	}
+
+	if err := api.Service.DeleteExpenseCategory(userId, txnId); err != nil {
+		msg := fmt.Sprintf("failed to delete expense category: %v", err)
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
+
+	msg := fmt.Sprintf("category successfully deleted")
+	return iz.Respond().Status(200).Text(msg)
+}
+
+func (api *Api) UpdateIncomeCategoryHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	var updateIncCategoryReq UpdateIncomeCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&updateIncCategoryReq); err != nil {
+		msg := fmt.Sprintf("failed to parse income category update request: %v", err)
+		return iz.Respond().Status(500).Text(msg)
+	}
+
+	if updateIncCategoryReq.NewName == "" {
+		msg := fmt.Sprintf("category name is required")
+		return iz.Respond().Status(400).Text(msg)
+	}
+
+	updateIncCategoryItem := budget.UpdateIncomeCategoryRequest{
+		ID:              updateIncCategoryReq.ID,
+		NewName:         updateIncCategoryReq.NewName,
+		NewTargetAmount: updateIncCategoryReq.NewTargetAmount,
+		NewNote:         updateIncCategoryReq.NewNote,
+	}
+
+	updatedCategory, err := api.Service.UpdateIncomeCategory(userId, updateIncCategoryItem)
+	if err != nil {
+		msg := fmt.Sprintf("failed to update income category: %v", err)
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
+
+	var categoryList ListIncomeCategories
+	categoryList.Categories = make([]IncomeCategoryResponseItem, 0, 1)
+	categoryList.Categories = append(categoryList.Categories, IncomeCategoryToHttp(*updatedCategory))
+
+	return iz.Respond().Status(200).JSON(categoryList)
+}
+
+func (api *Api) DeleteIncomeCategoryHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	var tId string = r.PathValue("id")
+	if tId == "" {
+		msg := fmt.Sprintf("category ID is required")
+		return iz.Respond().Status(400).Text(msg)
+	}
+	if err := api.Service.DeleteIncomeCategory(userId, tId); err != nil {
+		msg := fmt.Sprintf("failed to delete income category: %v", err)
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
+
+	msg := fmt.Sprintf("category successfully deleted")
+	return iz.Respond().Status(200).Text(msg)
 }
 
 func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
@@ -437,26 +470,26 @@ func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
 	}
 	response.Message = "You've logged in successfully!"
 	response.Token = token
+
 	return iz.Respond().Status(200).JSON(response)
 }
 
 func (api *Api) LogoutUserHandler(r *iz.Request) iz.Responder {
-	// token := r.Header.Get("Authorization")
-	// if token == "" {
-	// 	msg := fmt.Sprintf("authorization failed: Authorization header is required.")
-	// 	return iz.Respond().Status(401).Text(msg)
-	// }
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
 
-	// userId, err := api.Service.CheckSession(token)
-	// if err != nil {
-	// 	msg := fmt.Sprintf("authorization failed: %s", err.Error())
-	// 	return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
-	// }
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
 
-	// if err := api.Service.LogoutUser(userId, token); err != nil {
-	// 	msg := fmt.Sprintf("logout failed: %w", err)
-	// 	return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
-	// }
+	if err := api.Service.LogoutUser(userId, token); err != nil {
+		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
+	}
 	msg := "Logout successful."
 	return iz.Respond().Status(200).Text(msg)
 }
