@@ -475,22 +475,21 @@ func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
 }
 
 func (api *Api) LogoutUserHandler(r *iz.Request) iz.Responder {
-	// token := r.Header.Get("Authorization")
-	// if token == "" {
-	// 	msg := fmt.Sprintf("authorization failed: Authorization header is required.")
-	// 	return iz.Respond().Status(401).Text(msg)
-	// }
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
 
-	// userId, err := api.Service.CheckSession(token)
-	// if err != nil {
-	// 	msg := fmt.Sprintf("authorization failed: %s", err.Error())
-	// 	return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
-	// }
+	userId, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
+	}
 
-	// if err := api.Service.LogoutUser(userId, token); err != nil {
-	// 	msg := fmt.Sprintf("logout failed: %w", err)
-	// 	return iz.Respond().Status(httpStatusFromError(err)).Text(msg)
-	// }
+	if err := api.Service.LogoutUser(userId, token); err != nil {
+		return iz.Respond().Status(httpStatusFromError(err)).Text(err.Error())
+	}
 	msg := "Logout successful."
 	return iz.Respond().Status(200).Text(msg)
 }

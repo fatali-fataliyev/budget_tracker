@@ -937,7 +937,9 @@ func (mySql *MySQLStorage) LogoutUser(userId string, token string) error {
 
 	_, err := mySql.db.Exec(query, userId, token)
 	if err != nil {
-		return fmt.Errorf("failed to logout: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to logout user from LogoutUser() function, error: %v", specialErrId, err)
+		return fmt.Errorf("please send feedback with this ID: %s", specialErrId)
 	}
 	return nil
 }
