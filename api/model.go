@@ -16,6 +16,7 @@ import (
 // REQUESTS START:
 type CreateTransactionRequest struct {
 	CategoryName string  `json:"category_name"`
+	CategoryType string  `json:"category_type"`
 	Amount       float64 `json:"amount"`
 	Currency     string  `json:"currency"`
 	Note         string  `json:"note"`
@@ -84,6 +85,9 @@ type TransactionItem struct {
 	Type         string  `json:"category_type"`
 	CreatedBy    string  `json:"created_by"`
 }
+type ListTransactionResponse struct {
+	Transactions []TransactionItem `json:"transactions"`
+}
 
 type ExpenseCategoryResponseItem struct {
 	ID           string  `json:"id"`
@@ -116,16 +120,6 @@ type IncomeCategoryResponseItem struct {
 
 type ListIncomeCategories struct {
 	Categories []IncomeCategoryResponseItem `json:"categories"`
-}
-
-type ListTransactionResponse struct {
-	Transactions []TransactionItem `json:"transactions"`
-}
-
-type GetTotalsResponse struct {
-	Currency string  `json:"currency"`
-	Type     string  `json:"type"`
-	Total    float64 `json:"total"`
 }
 
 func httpStatusFromError(err error) int {
@@ -175,7 +169,6 @@ func ExpenseCategoryToHttp(category budget.ExpenseCategoryResponse) ExpenseCateg
 }
 
 func IncomeCategoryToHttp(category budget.IncomeCategoryResponse) IncomeCategoryResponseItem {
-	fmt.Println(category.TargetAmount)
 	return IncomeCategoryResponseItem{
 		ID:           category.ID,
 		Name:         category.Name,

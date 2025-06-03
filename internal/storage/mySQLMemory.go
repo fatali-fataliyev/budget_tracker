@@ -13,6 +13,7 @@ import (
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
 	"github.com/go-sql-driver/mysql"
+	"github.com/google/uuid"
 	"github.com/subosito/gotenv"
 )
 
@@ -25,15 +26,16 @@ func Init() (*sql.DB, error) {
 	password := os.Getenv("DBPASS")
 	dbname := os.Getenv("DBNAME")
 
-	logging.Logger.Info("Initializing database...")
+	logging.Logger.Info("initializing database...")
 
 	db, err := sql.Open("mysql", username+":"+password+"@tcp(localhost:3306)/"+dbname)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		logging.Logger.Errorf("failed to open database: %v", err)
+		return nil, fmt.Errorf("failed to open database")
 	}
 
 	for err := db.Ping(); err != nil; {
-		time.Sleep(2 * time.Second)
+		time.Sleep(3 * time.Second)
 	}
 	logging.Logger.Info("Connected to database")
 	return db, nil
@@ -44,15 +46,17 @@ type MySQLStorage struct {
 }
 
 func NewMySQLStorage(db *sql.DB) *MySQLStorage {
-	logging.Logger.Debug("New mysql storage created")
 	return &MySQLStorage{db: db}
 }
 
 func (mySql *MySQLStorage) SaveUser(user auth.User) error {
 	query := "INSERT INTO users (id, username, fullname, hashed_password, email, pending_email) VALUES (?, ?, ?, ?, ?, ?);"
 	_, err := mySql.db.Exec(query, user.ID, user.UserName, user.FullName, user.PasswordHashed, user.Email, user.Email)
+
 	if err != nil {
-		return fmt.Errorf("failed to register user: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to save user from SaveUser() function, error: %v", specialErrId, err)
+		return fmt.Errorf("please send feedback with this ID: %s", specialErrId)
 	}
 	return nil
 }
@@ -61,102 +65,107 @@ func (mySql *MySQLStorage) SaveSession(session auth.Session) error {
 	query := "INSERT INTO sessions (id, token, created_at, expire_at, user_id) VALUES (?, ?, ?, ?, ?);"
 	_, err := mySql.db.Exec(query, session.ID, session.Token, session.CreatedAt, session.ExpireAt, session.UserID)
 	if err != nil {
-		return fmt.Errorf("failed to save session: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to save session from SaveSession() function, error: %v", specialErrId, err)
+		return fmt.Errorf("failed to save session, please send feedback by this ID: %s", specialErrId)
 	}
 	return nil
 }
 func (mySql *MySQLStorage) SaveExpenseCategory(category budget.ExpenseCategory) error {
-	if category.Type == "" {
-		return fmt.Errorf("%w: category type is empty", appErrors.ErrInvalidInput)
-	}
-	if category.Type == "-" {
-		query := "INSERT INTO expense_categories (id, name, max_amount, period_day, created_at, updated_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
-		_, err := mySql.db.Exec(query, category.ID, category.Name, category.MaxAmount, category.PeriodDay, category.CreatedAt, category.UpdatedAt, category.Note, category.CreatedBy)
-		if err != nil {
-			if mysqlErr, ok := err.(*mysql.MySQLError); ok {
-				if mysqlErr.Number == 1062 {
-					return fmt.Errorf("%w: this category already exists.", appErrors.ErrConflict)
-				}
+	query := "INSERT INTO expense_categories (id, name, max_amount, period_day, created_at, updated_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
+	_, err := mySql.db.Exec(query, category.ID, category.Name, category.MaxAmount, category.PeriodDay, category.CreatedAt, category.UpdatedAt, category.Note, category.CreatedBy)
+	if err != nil {
+		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
+			if mysqlErr.Number == 1062 {
+				return fmt.Errorf("%w: this category already exists.", appErrors.ErrConflict)
 			}
-			return fmt.Errorf("failed to save category: %w", err)
 		}
-		return nil
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to save expense category from SaveExpenseCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("failed to save expense category, please send feedback by this ID: %s", specialErrId)
 	}
-	return fmt.Errorf("%w: category type is not valid", appErrors.ErrInvalidInput)
+	return nil
 }
 
 func (mySql *MySQLStorage) SaveIncomeCategory(category budget.IncomeCategory) error {
-	if category.Type == "" {
-		return fmt.Errorf("%w: category type is empty", appErrors.ErrInvalidInput)
-	}
-	if category.Type == "+" {
-		query := "INSERT INTO income_categories (id, name, target_amount, created_at, updated_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?);"
-		_, err := mySql.db.Exec(query, category.ID, category.Name, category.TargetAmount, category.CreatedAt, category.UpdatedAt, category.Note, category.CreatedBy)
-		if err != nil {
-			if mysqlErr, ok := err.(*mysql.MySQLError); ok {
-				if mysqlErr.Number == 1062 {
-					return fmt.Errorf("%w: this category already exist", appErrors.ErrConflict)
-				}
+	query := "INSERT INTO income_categories (id, name, target_amount, created_at, updated_at, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?);"
+	_, err := mySql.db.Exec(query, category.ID, category.Name, category.TargetAmount, category.CreatedAt, category.UpdatedAt, category.Note, category.CreatedBy)
+	if err != nil {
+		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
+			if mysqlErr.Number == 1062 {
+				return fmt.Errorf("%w: this category already exists.", appErrors.ErrConflict)
 			}
-			return fmt.Errorf("failed to save category: %w", err)
 		}
-		return nil
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to save income category from SaveIncomeCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("failed to save income category, please send feedback by this ID: %s", specialErrId)
 	}
-	return fmt.Errorf("%w: category type is not valid", appErrors.ErrInvalidInput)
+	return nil
 }
 
-func (mySql *MySQLStorage) UpdateSession(user_id string, expireDate time.Time) error {
+func (mySql *MySQLStorage) UpdateSession(userId string, newExpireDate time.Time) error {
 	query := `UPDATE sessions SET expire_at = ? WHERE user_id = ?`
 
-	res, err := mySql.db.Exec(query, expireDate, user_id)
+	res, err := mySql.db.Exec(query, newExpireDate, userId)
 	if err != nil {
-		return fmt.Errorf("failed to update session: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to extend session expire date from UpdateSession() function, error : %v", specialErrId, err)
+		return fmt.Errorf("session expire date exten failed, please send feedback by this ID: %s", specialErrId)
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get affected rows: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to check extended session status from UpdateSession() function, error : %v", specialErrId, err)
+		return fmt.Errorf("failed to check session expire status, please send feedback by this ID: %s", specialErrId)
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("%w: session not found", appErrors.ErrNotFound)
+		return fmt.Errorf("%w: session does not exist, please login", appErrors.ErrNotFound)
 	}
+
 	return nil
 }
 
 func (mySql *MySQLStorage) GetSessionByToken(token string) (auth.Session, error) {
 	query := `SELECT id, token, created_at, expire_at, user_id FROM sessions WHERE token = ?`
 
-	var dSession dbSession
+	var dbSession dbSession
 	err := mySql.db.QueryRow(query, token).Scan(
-		&dSession.ID,
-		&dSession.Token,
-		&dSession.CreatedAt,
-		&dSession.ExpireAt,
-		&dSession.UserID,
+		&dbSession.ID,
+		&dbSession.Token,
+		&dbSession.CreatedAt,
+		&dbSession.ExpireAt,
+		&dbSession.UserID,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return auth.Session{}, fmt.Errorf("%w: session not found", appErrors.ErrNotFound)
+			return auth.Session{}, fmt.Errorf("%w: session does not exist, please login", appErrors.ErrNotFound)
 		}
-		return auth.Session{}, fmt.Errorf("failed to scan session row: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to scan row from GetSessionByToken() function, error: %v", specialErrId, err)
+		return auth.Session{}, fmt.Errorf("failed to get session by token, please send feedback by this ID: %s", specialErrId)
 	}
 
-	createdAt, err := time.Parse("2006-01-02 15:04:05", dSession.CreatedAt)
+	createdAt, err := time.Parse("2006-01-02 15:04:05", dbSession.CreatedAt)
 	if err != nil {
-		return auth.Session{}, fmt.Errorf("failed to parse created_at")
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to parse created_at field from GetSessionByToken() function, error : %v", specialErrId, err)
+		return auth.Session{}, fmt.Errorf("failed to check session create date, please send feedback by this ID: %s", specialErrId)
 	}
-	expireAt, err := time.Parse("2006-01-02 15:04:05", dSession.ExpireAt)
+	expireAt, err := time.Parse("2006-01-02 15:04:05", dbSession.ExpireAt)
 	if err != nil {
-		return auth.Session{}, fmt.Errorf("failed to parse expire_at")
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to parse expire_at field from GetSessionByToken() function, error : %v", specialErrId, err)
+		return auth.Session{}, fmt.Errorf("failed to check session expire date, please send feedback by this ID: %s", specialErrId)
 	}
 
 	session := auth.Session{
-		ID:        dSession.ID,
-		Token:     dSession.Token,
+		ID:        dbSession.ID,
+		Token:     dbSession.Token,
 		CreatedAt: createdAt,
 		ExpireAt:  expireAt,
-		UserID:    dSession.UserID,
+		UserID:    dbSession.UserID,
 	}
 
 	return session, nil
@@ -171,65 +180,36 @@ func (mySql *MySQLStorage) CheckSession(token string) (string, error) {
 	err := mySql.db.QueryRow(query, token).Scan(&userID, &expireAtString)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("%w: session not found", appErrors.ErrNotFound)
+			return "", fmt.Errorf("%w: session does not exist, please login", appErrors.ErrNotFound)
 		}
-		return "", fmt.Errorf("failed to check session: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to check session from CheckSession() function, error : %v", specialErrId, err)
+		return "", fmt.Errorf("failed to check session, please send feedback by this ID: %s", specialErrId)
 	}
 
 	expireAt, err := time.Parse("2006-01-02 15:04:05", expireAtString)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse expire_at: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to parse expire_at field from CheckSession() function, error : %v", specialErrId, err)
+		return "", fmt.Errorf("failed to check session expire date, please send feedback by this ID: %s", specialErrId)
 	}
+
 	now := time.Now()
 
 	if expireAt.Before(now) {
 		return "", fmt.Errorf("%w: session expired, please login again", appErrors.ErrAuth)
 	}
+
 	return userID, nil
-}
-
-func (mySql *MySQLStorage) GetCategoryTypeByName(userId string, categoryName string) (string, error) {
-	query := "SELECT id FROM expense_categories WHERE created_by = ? AND name = ?;"
-	row := mySql.db.QueryRow(query, userId, categoryName)
-
-	var categoryType string
-	var id string
-	err := row.Scan(&id)
-	if err == nil {
-		categoryType = "-"
-		return categoryType, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return "", fmt.Errorf("failed to scan expense category type: %w", err)
-	}
-
-	query = "SELECT id FROM income_categories WHERE created_by = ? AND name = ?;"
-	row = mySql.db.QueryRow(query, userId, categoryName)
-
-	err = row.Scan(&id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
-		}
-		return "", fmt.Errorf("failed to scan income category type: %w", err)
-	}
-	categoryType = "+"
-	return categoryType, nil
 }
 
 func (mySql *MySQLStorage) SaveTransaction(t budget.Transaction) error {
 	query := "INSERT INTO transactions (id, category_name, amount, currency, created_at, note, created_by, category_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
-	categoryType, err := mySql.GetCategoryTypeByName(t.CreatedBy, t.CategoryName)
+	_, err := mySql.db.Exec(query, t.ID, t.CategoryName, t.Amount, t.Currency, t.CreatedAt, t.Note, t.CreatedBy, t.CategoryType)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
-		}
-		return fmt.Errorf("failed to get category type: %w", err)
-	}
-	t.CategoryType = categoryType
-	_, err = mySql.db.Exec(query, t.ID, t.CategoryName, t.Amount, t.Currency, t.CreatedAt, t.Note, t.CreatedBy, t.CategoryType)
-	if err != nil {
-		return fmt.Errorf("failed to save transaction: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to save transaction from SaveTransaction() function, error : %v", specialErrId, err)
+		return fmt.Errorf("failed to save transaction, please send feedback by this ID: %s", specialErrId)
 	}
 	return nil
 }
@@ -269,7 +249,9 @@ func (mySql *MySQLStorage) GetTotalAmountOfTransactions(userID string, categoryN
 	var total float64
 	err := mySql.db.QueryRow(query, args...).Scan(&total)
 	if err != nil {
-		return 0, err
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to get total amount from GetTotalAmountOfTransactions() function, error : %v", specialErrId, err)
+		return 0, fmt.Errorf("failed to get total amount of transactions, please send feedback by this ID: %s", specialErrId)
 	}
 	return total, nil
 }
@@ -278,16 +260,21 @@ func (mySql *MySQLStorage) GetFilteredIncomeCategories(userID string, filters *b
 	query := "SELECT id, name, target_amount, created_at, updated_at, note, created_by FROM income_categories WHERE created_by = ?"
 	args := []interface{}{userID}
 
+	// Without filters
+
 	if filters.IsAllNil {
 		query += ";"
 		rows, err := mySql.db.Query(query, args...)
-		if err != nil {
-			return nil, err
-		}
 
+		if err != nil {
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to get all income categories from GetFilteredIncomeCategories() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
+		}
 		defer rows.Close()
 
 		var categories []budget.IncomeCategoryResponse
+
 		for rows.Next() {
 			var category budget.IncomeCategoryResponse
 			var createdAt string
@@ -295,29 +282,39 @@ func (mySql *MySQLStorage) GetFilteredIncomeCategories(userID string, filters *b
 
 			err = rows.Scan(&category.ID, &category.Name, &category.TargetAmount, &createdAt, &updatedAt, &category.Note, &category.CreatedBy)
 			if err != nil {
-				return nil, err
+				specialErrId := uuid.New().String()
+				logging.Logger.Errorf("special_id: %s | failed to scan row from GetFilteredIncomeCategories() function, error : %v", specialErrId, err)
+				return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 			}
 			category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse created_at: %w", err)
+				specialErrId := uuid.New().String()
+				logging.Logger.Errorf("special_id: %s | failed to parse created at row from GetFilteredIncomeCategories() function, error : %v", specialErrId, err)
+				return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 			}
 			category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse updated_at: %w", err)
+				specialErrId := uuid.New().String()
+				logging.Logger.Errorf("special_id: %s | failed to parse updated at row from GetFilteredIncomeCategories() function, error : %v", specialErrId, err)
+				return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 			}
 
 			categoryAmount, err := mySql.GetTotalAmountOfTransactions(userID, category.Name, "+")
 			if err != nil {
-				return nil, fmt.Errorf("failed to get total amount of transactions: %w", err)
+				return nil, fmt.Errorf("%w", err)
 			}
 			category.Amount = categoryAmount
 			categories = append(categories, category)
 		}
 		if err := rows.Err(); err != nil {
-			return nil, err
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to iterate over rows from GetFilteredIncomeCategories() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
 		return categories, nil
 	}
+
+	// With filters
 
 	if len(filters.Names) > 0 {
 		query += " AND name IN (?" + strings.Repeat(",?", len(filters.Names)-1) + ")"
@@ -356,27 +353,36 @@ func (mySql *MySQLStorage) GetFilteredIncomeCategories(userID string, filters *b
 
 		err = rows.Scan(&category.ID, &category.Name, &category.TargetAmount, &createdAt, &updatedAt, &category.Note, &category.CreatedBy)
 		if err != nil {
-			return nil, err
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to scan row from GetFilteredIncomeCategories() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
 		category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse created_at: %w", err)
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to parse created at row from GetFilteredIncomeCategories() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
 		category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse updated_at: %w", err)
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to parse updated at row from GetFilteredIncomeCategories() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
 
 		categoryAmount, err := mySql.GetTotalAmountOfTransactions(userID, category.Name, "+")
 		if err != nil {
-			return nil, fmt.Errorf("failed to get total amount of transactions: %w", err)
+			return nil, fmt.Errorf("%w", err)
 		}
 		category.Amount = categoryAmount
 		categories = append(categories, category)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to iterate over rows from GetFilteredIncomeCategories() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
+
 	return categories, nil
 }
 
@@ -388,7 +394,9 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(userID string, filters *
 		query += ";"
 		rows, err := mySql.db.Query(query, args...)
 		if err != nil {
-			return nil, err
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to get all expense categories from GetFilteredExpenseCategories() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
 
 		defer rows.Close()
@@ -401,28 +409,37 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(userID string, filters *
 
 			err = rows.Scan(&category.ID, &category.Name, &category.MaxAmount, &category.PeriodDay, &createdAt, &updatedAt, &category.Note, &category.CreatedBy)
 			if err != nil {
-				return nil, err
+				specialErrId := uuid.New().String()
+				logging.Logger.Errorf("special_id: %s | failed to scan row from GetFilteredExpenseCategories() function, error : %v", specialErrId, err)
+				return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 			}
 			category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse created_at: %w", err)
+				specialErrId := uuid.New().String()
+				logging.Logger.Errorf("special_id: %s | failed to parse created at date from GetFilteredExpenseCategories() function, error : %v", specialErrId, err)
+				return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 			}
 			category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse updated_at: %w", err)
+				specialErrId := uuid.New().String()
+				logging.Logger.Errorf("special_id: %s | failed to parse updated at date from GetFilteredExpenseCategories() function, error : %v", specialErrId, err)
+				return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 			}
 
 			categoryAmount, err := mySql.GetTotalAmountOfTransactions(userID, category.Name, "-")
 			if err != nil {
-				return nil, fmt.Errorf("failed to get total amount of transactions: %w", err)
+				return nil, fmt.Errorf("%w", err)
 			}
 			category.Amount = categoryAmount
 
 			categories = append(categories, category)
 		}
 		if err := rows.Err(); err != nil {
-			return nil, err
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to iterate over rows from GetFilteredExpenseCategories() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
+
 		return categories, nil
 	}
 
@@ -467,28 +484,37 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(userID string, filters *
 
 		err = rows.Scan(&category.ID, &category.Name, &category.MaxAmount, &category.PeriodDay, &createdAt, &updatedAt, &category.Note, &category.CreatedBy)
 		if err != nil {
-			return nil, err
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to scan row from GetFilteredExpenseCategories() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
 		category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse created_at: %w", err)
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to parse created at date from GetFilteredExpenseCategories() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
 		category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse updated_at: %w", err)
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to parse updated at date from GetFilteredExpenseCategories() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
 
 		categoryAmount, err := mySql.GetTotalAmountOfTransactions(userID, category.Name, "-")
 		if err != nil {
-			return nil, fmt.Errorf("failed to get total amount of transactions: %w", err)
+			return nil, fmt.Errorf("%w", err)
 		}
 		category.Amount = categoryAmount
 
 		categories = append(categories, category)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to iterate over rows from GetFilteredExpenseCategories() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
+
 	return categories, nil
 }
 
@@ -496,7 +522,9 @@ func (mySql *MySQLStorage) UpdateExpenseCategory(userID string, filters budget.U
 	query := "UPDATE expense_categories SET name = ?, max_amount = ?, period_day = ?, updated_at = ?, note = ? WHERE created_by = ? AND id = ?;"
 	_, err := mySql.db.Exec(query, filters.NewName, filters.NewMaxAmount, filters.NewPeriodDay, filters.UpdateTime, filters.NewNote, userID, filters.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update expense category: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to update expense category from UpdateExpenseCategory() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 
 	query = "SELECT id, name, max_amount, period_day, created_at, updated_at, note, created_by FROM expense_categories WHERE created_by = ? AND id = ?;"
@@ -509,17 +537,24 @@ func (mySql *MySQLStorage) UpdateExpenseCategory(userID string, filters budget.U
 	err = row.Scan(&category.ID, &category.Name, &category.MaxAmount, &category.PeriodDay, &createdAt, &updatedAt, &category.Note, &category.CreatedBy)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
+			return nil, fmt.Errorf("%w: category does not exist", appErrors.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to scan category: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to scan row from UpdateExpenseCategory() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
+
 	category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse created_at: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to parse create at time from UpdateExpenseCategory() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 	category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse updated_at: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to parse update at time from UpdateExpenseCategory() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 
 	categoryAmount, err := mySql.GetTotalAmountOfTransactions(userID, category.Name, "-")
@@ -534,8 +569,11 @@ func (mySql *MySQLStorage) UpdateExpenseCategory(userID string, filters budget.U
 func (mySql *MySQLStorage) UpdateIncomeCategory(userID string, filters budget.UpdateIncomeCategoryRequest) (*budget.IncomeCategoryResponse, error) {
 	query := "UPDATE income_categories SET name = ?, target_amount = ?, updated_at = ?, note = ? WHERE created_by = ? AND id = ?;"
 	_, err := mySql.db.Exec(query, filters.NewName, filters.NewTargetAmount, filters.UpdateTime, filters.NewNote, userID, filters.ID)
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to update income category: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to update income category from UpdateIncomeCategory() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 
 	query = "SELECT id, name, target_amount, created_at, updated_at, note, created_by FROM income_categories WHERE created_by = ? AND id = ?;"
@@ -550,15 +588,22 @@ func (mySql *MySQLStorage) UpdateIncomeCategory(userID string, filters budget.Up
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to scan category: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to scan row from UpdateIncomeCategory() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
+
 	category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse created_at: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to parse create at time from UpdateIncomeCategory() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 	category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse updated_at: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to parse update at time from UpdateIncomeCategory() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 
 	categoryAmount, err := mySql.GetTotalAmountOfTransactions(userID, category.Name, "+")
@@ -569,31 +614,17 @@ func (mySql *MySQLStorage) UpdateIncomeCategory(userID string, filters budget.Up
 	category.Amount = categoryAmount
 
 	return &category, nil
-
-}
-
-func (mySql *MySQLStorage) getCategoryNameById(userID string, categoryId string) (*string, error) {
-	query := "SELECT name FROM expense_categories WHERE created_by = ? AND id = ?;"
-	row := mySql.db.QueryRow(query, userID, categoryId)
-
-	var name string
-	err := row.Scan(&name)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
-		}
-		return nil, fmt.Errorf("failed to scan category: %w", err)
-	}
-	return &name, nil
 }
 
 func (mySql *MySQLStorage) DeleteExpenseCategory(userId string, categoryId string) error {
 	tx, err := mySql.db.Begin()
 	if err != nil {
-		return fmt.Errorf("failed to start SQL command transaction: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to start SQL transaction from DeleteExpenseCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 
-	categoryName, err := mySql.getCategoryNameById(userId, categoryId)
+	categoryName, err := mySql.getCategoryNameById(userId, categoryId, "-")
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to get category name: %w", err)
@@ -603,28 +634,115 @@ func (mySql *MySQLStorage) DeleteExpenseCategory(userId string, categoryId strin
 	_, err = tx.Exec(deleteTxQuery, userId, categoryName)
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("failed to delete related transactions: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to delete all related transactions from DeleteExpenseCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 
 	deleteCategoryQuery := "DELETE FROM expense_categories WHERE created_by = ? AND id = ?;"
 	result, err := tx.Exec(deleteCategoryQuery, userId, categoryId)
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("failed to delete category: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to delete expense category from DeleteExpenseCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("failed to check delete status of category: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to check expense category delete status from DeleteExpenseCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 	if rowsAffected == 0 {
 		tx.Rollback()
-		return fmt.Errorf("%w: category not found", appErrors.ErrNotFound)
+		return fmt.Errorf("%w: category does not exist.", appErrors.ErrNotFound)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit SQL command transaction: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to commit SQL transaction from DeleteExpenseCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("please send feedback by this ID: %s", specialErrId)
+	}
+
+	return nil
+}
+
+func (mySql *MySQLStorage) getCategoryNameById(userID string, categoryId string, categoryType string) (*string, error) {
+	var query string
+
+	if categoryType == "-" {
+		query = "SELECT name FROM expense_categories WHERE created_by = ? AND id = ?;"
+	} else if categoryType == "+" {
+		query = "SELECT name FROM income_categories WHERE created_by = ? AND id = ?;"
+	} else {
+		return nil, fmt.Errorf("%w: unknown category type: %s", appErrors.ErrInvalidInput, categoryType)
+	}
+	row := mySql.db.QueryRow(query, userID, categoryId)
+
+	var name string
+	err := row.Scan(&name)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: category does not exist.", appErrors.ErrNotFound)
+		}
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to get category name by id from getCategoryNameById() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
+	}
+
+	return &name, nil
+}
+
+func (mySql *MySQLStorage) DeleteIncomeCategory(userId string, categoryId string) error {
+	tx, err := mySql.db.Begin()
+	if err != nil {
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to start SQL transaction from DeleteIncomeCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("please send feedback by this ID: %s", specialErrId)
+	}
+
+	categoryName, err := mySql.getCategoryNameById(userId, categoryId, "+")
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to get category name: %w", err)
+	}
+
+	deleteTxQuery := "DELETE FROM transactions WHERE created_by = ? AND category_name = ? AND category_type = '+';"
+	_, err = tx.Exec(deleteTxQuery, userId, categoryName)
+	if err != nil {
+		tx.Rollback()
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to delete all related transactions from DeleteIncomeCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("please send feedback by this ID: %s", specialErrId)
+	}
+
+	deleteCategoryQuery := "DELETE FROM income_categories WHERE created_by = ? AND id = ?;"
+	result, err := tx.Exec(deleteCategoryQuery, userId, categoryId)
+	if err != nil {
+		tx.Rollback()
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to delete income category from DeleteIncomeCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("please send feedback by this ID: %s", specialErrId)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to check income category delete status from DeleteIncomeCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("please send feedback by this ID: %s", specialErrId)
+	}
+	if rowsAffected == 0 {
+		tx.Rollback()
+		return fmt.Errorf("%w: category does not exist.", appErrors.ErrNotFound)
+	}
+
+	if err := tx.Commit(); err != nil {
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to commit SQL transaction from DeleteIncomeCategory() function, error : %v", specialErrId, err)
+		return fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 
 	return nil
@@ -638,8 +756,9 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budge
 		query += ";"
 		rows, err := mySql.db.Query(query, args...)
 		if err != nil {
-			fmt.Print("Error when getting transactions: ", err)
-			return nil, err
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to get all transactions from GetFilteredTransactions() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
 
 		defer rows.Close()
@@ -651,18 +770,24 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budge
 
 			err = rows.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &createdAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
 			if err != nil {
-				fmt.Print("Error when scanning transaction: ", err)
-				return nil, err
+				specialErrId := uuid.New().String()
+				logging.Logger.Errorf("special_id: %s | failed to scan row from GetFilteredTransactions() function, error : %v", specialErrId, err)
+				return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 			}
 			transaction.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse created_at of transaction: %w", err)
+				specialErrId := uuid.New().String()
+				logging.Logger.Errorf("special_id: %s | failed to parse create at GetFilteredTransactions() function, error : %v", specialErrId, err)
+				return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 			}
 			transactions = append(transactions, transaction)
 		}
 		if err := rows.Err(); err != nil {
-			return nil, err
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to iterate over rows from GetFilteredTransactions() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
+
 		return transactions, nil
 	}
 
@@ -706,16 +831,22 @@ func (mySql *MySQLStorage) GetFilteredTransactions(userID string, filters *budge
 
 		err = rows.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &createdAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
 		if err != nil {
-			return nil, err
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to get filtered transactions from GetFilteredTransactions() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
 		transaction.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse created_at of transaction: %w", err)
+			specialErrId := uuid.New().String()
+			logging.Logger.Errorf("special_id: %s | failed to parse create at from GetFilteredTransactions() function, error : %v", specialErrId, err)
+			return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 		}
 		transactions = append(transactions, transaction)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to iterate over rows from GetFilteredTransactions() function, error : %v", specialErrId, err)
+		return nil, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 	return transactions, nil
 }
@@ -729,14 +860,18 @@ func (mySql *MySQLStorage) GetTransactionById(userID string, transactionId strin
 	err := row.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &createdAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return budget.Transaction{}, fmt.Errorf("%w: transaction not found", appErrors.ErrNotFound)
+			return budget.Transaction{}, fmt.Errorf("%w: transaction does not exist.", appErrors.ErrNotFound)
 		}
-		return budget.Transaction{}, fmt.Errorf("failed to scan transaction: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to scan row from GetTransactionById() function, error : %v", specialErrId, err)
+		return budget.Transaction{}, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 
 	transaction.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 	if err != nil {
-		return budget.Transaction{}, fmt.Errorf("failed to parse created_date")
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to parse create at from GetTransactionById() function, error : %v", specialErrId, err)
+		return budget.Transaction{}, fmt.Errorf("please send feedback by this ID: %s", specialErrId)
 	}
 
 	return transaction, nil
@@ -750,9 +885,11 @@ func (mySql *MySQLStorage) ValidateUser(credentials auth.UserCredentialsPure) (a
 	err := row.Scan(&user.ID, &user.UserName, &user.FullName, &user.PasswordHashed, &user.Email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return auth.User{}, fmt.Errorf("%w: user not found, register please", appErrors.ErrNotFound)
+			return auth.User{}, fmt.Errorf("%w: user does not exist, register please", appErrors.ErrNotFound)
 		}
-		return auth.User{}, fmt.Errorf("failed to scan user: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to scan user row from ValidateUser(), error: %v", specialErrId, err)
+		return auth.User{}, fmt.Errorf("failed to validate user, please send feedback with this ID: %s", specialErrId)
 	}
 	if auth.ComparePasswords(user.PasswordHashed, credentials.PasswordPlain) != true {
 		return auth.User{}, fmt.Errorf("%w: password is wrong", appErrors.ErrInvalidInput)
@@ -760,84 +897,39 @@ func (mySql *MySQLStorage) ValidateUser(credentials auth.UserCredentialsPure) (a
 	return user, nil
 }
 
-func (mySql *MySQLStorage) DeleteTransaction(userID string, transactionId string) error {
-	query := "DELETE FROM transactions WHERE created_by = ? AND id = ?;"
-	result, err := mySql.db.Exec(query, userID, transactionId)
-	if err != nil {
-		return fmt.Errorf("failed to delete transaction: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check: delete status: %w", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("%w: transaction not found", appErrors.ErrNotFound)
-	}
-	return nil
-}
-func (mySql *MySQLStorage) UpdateTransaction(userID string, t budget.Transaction) error {
-	// query := "UPDATE transactions SET amount = ?, limit_for_amount = ?, currency = ?, category = ?, updated_date = ?, type = ? WHERE created_by = ? AND id = ?;"
-	// result, err := mySql.db.Exec(query, t.Amount, t.Limit, t.Currency, t.Category, t.UpdatedDate, t.Type, userID, t.ID)
-	// if err != nil {
-	// return fmt.Errorf("failed to update transaction: %w", err)
-	// }
-
-	// rowsAffected, err := result.RowsAffected()
-	// if err != nil {
-	// 	return fmt.Errorf("failed to check: update status: %w", err)
-	// }
-	// if rowsAffected == 0 {
-	// 	return fmt.Errorf("%w: transaction not found", appErrors.ErrNotFound)
-	// }
-	return nil
-}
-
-func (mySql *MySQLStorage) ChangeAmountOfTransaction(userId string, tId string, tType string, amount float64) error {
-	var query string
-	if tType == "+" {
-		query = `
-			UPDATE transactions 
-			SET amount = amount + ? 
-			WHERE id = ? AND created_by = ?
-		`
-	} else {
-		query = `
-			UPDATE transactions 
-			SET amount = amount - ? 
-			WHERE id = ? AND created_by = ?
-		`
-	}
-	_, err := mySql.db.Exec(query, amount, tId, userId)
-	if err != nil {
-		return fmt.Errorf("failed to update transaction amount: %w", err)
-	}
-	return nil
-}
-
 func (mySql *MySQLStorage) IsUserExists(username string) (bool, error) {
 	query := "SELECT 1 FROM users WHERE username = ?;"
+
 	row := mySql.db.QueryRow(query, username)
 	err := row.Scan()
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
 		}
-		return false, fmt.Errorf("failed to scan user: %w", err)
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to scan row from IsUserExists() function, error: %v", specialErrId, err)
+		return false, fmt.Errorf("please send feedback with this ID: %s", specialErrId)
 	}
+
 	return true, nil
 }
 
-func (mySql *MySQLStorage) IsEmailConfirmed(emailAddress string) bool {
+func (mySql *MySQLStorage) IsEmailConfirmed(emailAddress string) (bool, error) {
 	query := "SELECT COUNT(*) FROM users WHERE email = ? AND pending_email IS NULL;"
 	row := mySql.db.QueryRow(query, emailAddress)
 
 	var count int
 	err := row.Scan(&count)
 	if err != nil {
-		return false
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | failed to scan row from IsEmailConfirmed() function, error: %v", specialErrId, err)
+		return false, fmt.Errorf("please send feedback with this ID: %s", specialErrId)
 	}
-	return count > 0
+
+	return count > 0, nil
 }
 
 func (mySql *MySQLStorage) LogoutUser(userId string, token string) error {
