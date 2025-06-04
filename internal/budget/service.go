@@ -5,12 +5,15 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
 	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
+	"github.com/fatali-fataliyev/budget_tracker/logging"
 	"github.com/google/uuid"
 )
 
@@ -232,6 +235,42 @@ func (bt *BudgetTracker) SaveTransaction(userId string, transaction TransactionR
 		return fmt.Errorf("failed to save transaction to db: %w", err)
 	}
 	return nil
+}
+
+func (bt *BudgetTracker) ProcessImage(imageRawText string) (ProcessedImageResponse, error) {
+	if imageRawText == "" {
+		return ProcessedImageResponse{}, fmt.Errorf("empty raw text")
+	}
+
+	var result ProcessedImageResponse
+
+	amountRegex := regexp.MustCompile(`\d+(\.\d+)?`)
+
+	amountMatches := amountRegex.FindAllString(imageRawText, -1)
+
+	for _, amount := range amountMatches {
+		num, err := strconv.ParseFloat(amount, 64)
+		if err == nil {
+			result.Amounts = append(result.Amounts, num)
+		}
+		logging.Logger.Warn("failed to convert string number to float64 from ProcessImage() function, error: %v", err)
+	}
+
+	symbolRegex := regexp.MustCompile(`[$€£¥₹₽₩₪₫₴₦₵₲₺₡₨៛฿₸]`)
+	symbolMatches := symbolRegex.FindAllString(imageRawText, -1)
+
+	for _, symbol := range symbolMatches {
+		result.CurrenciesSymbol = append(result.CurrenciesSymbol, symbol)
+	}
+
+	isoRegex := regexp.MustCompile(`\b[A-Z]{3}\b`)
+	isoMatches := isoRegex.FindAllString(imageRawText, -1)
+
+	for _, iso := range isoMatches {
+		result.CurrenciesISO = append(result.CurrenciesISO, iso)
+	}
+
+	return result, nil
 }
 
 func (bt *BudgetTracker) SaveExpenseCategory(userId string, category ExpenseCategoryRequest) error {

@@ -135,3 +135,9 @@ type TransactionList struct {
 	Type          string
 	IsAllNil      bool
 }
+
+type ProcessedImageResponse struct {
+	Amounts          []float64
+	CurrenciesISO    []string
+	CurrenciesSymbol []string
+}

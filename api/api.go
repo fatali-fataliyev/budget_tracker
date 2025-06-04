@@ -1,14 +1,23 @@
 package api
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
 
 	"github.com/0xcafe-io/iz"
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
+	"github.com/google/uuid"
+	ocr "github.com/ranghetto/go_ocr_space"
 )
+
+const MAX_IMAGE_UPLOAD_SIZE = 1 << 20 // 1mib
 
 type Api struct {
 	Service *budget.BudgetTracker
@@ -84,6 +93,75 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 	}
 	msg := fmt.Sprintf("transaction successfully created")
 	return iz.Respond().Status(201).Text(msg)
+}
+
+func (api *Api) ProcessImageHandler(r *iz.Request) iz.Responder {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		msg := fmt.Sprintf("authorization failed: Authorization header is required.")
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	_, err := api.Service.CheckSession(token)
+	if err != nil {
+		msg := fmt.Sprintf("authorization failed: %s", err.Error())
+		return iz.Respond().Status(401).Text(msg)
+	}
+
+	err = r.ParseMultipartForm(MAX_IMAGE_UPLOAD_SIZE)
+	if err != nil {
+		msg := fmt.Sprintf("error parsing form: maxiumum file size is: 1MB")
+		return iz.Respond().Status(400).Text(msg)
+	}
+
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		msg := fmt.Sprintf("failed to get image %v", err)
+		return iz.Respond().Status(500).Text(msg)
+	}
+	defer file.Close()
+
+	buf := new(bytes.Buffer)
+	if _, err := io.Copy(buf, file); err != nil {
+		msg := fmt.Sprintf("failed to get image %v", err)
+		return iz.Respond().Status(500).Text(msg)
+	}
+	imageType := http.DetectContentType(buf.Bytes())
+	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
+
+	base64Img := fmt.Sprintf("data:%s;base64,%s", imageType, encoded)
+
+	imageRawText, err := RequestOCRApi(base64Img)
+	if err != nil {
+		msg := fmt.Sprintf("failed to process image: %v", err)
+		return iz.Respond().Status(500).Text(msg)
+	}
+
+	processResultRaw, err := api.Service.ProcessImage(imageRawText)
+	if err != nil {
+		msg := fmt.Sprintf("failed to process image: %v", err)
+		return iz.Respond().Status(500).Text(msg)
+	}
+
+	processedImageResp := ProcessedImageToHttp(processResultRaw)
+	return iz.Respond().Status(200).JSON(processedImageResp)
+}
+
+func RequestOCRApi(base64Img string) (string, error) {
+	ocrApiKey := os.Getenv("OCR_APIKEY")
+	if ocrApiKey == "" {
+		return "", fmt.Errorf("OCR key is required")
+	}
+
+	config := ocr.InitConfig(ocrApiKey, "auto", ocr.OCREngine2)
+	result, err := config.ParseFromBase64(base64Img)
+	if err != nil {
+		specialErrId := uuid.New().String()
+		logging.Logger.Errorf("special_id: %s | free ocr api failed from RequestOCRApi() function, error: %v", specialErrId, err)
+		return "", fmt.Errorf("sorry something went wrong, please send feedback by this ID: %s", specialErrId)
+	}
+
+	return result.JustText(), nil
 }
 
 func (api *Api) SaveExpenseCategoryHandler(r *iz.Request) iz.Responder {

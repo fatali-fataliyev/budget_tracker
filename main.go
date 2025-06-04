@@ -10,9 +10,17 @@ import (
 	"github.com/fatali-fataliyev/budget_tracker/internal/storage"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/rs/cors"
 )
 
 var bt budget.BudgetTracker // Global
+
+var corsConf = cors.New(cors.Options{
+	AllowedOrigins:   []string{"*"}, // change with actual address in production
+	AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+	AllowedHeaders:   []string{"Authorization", "Content-Type"},
+	AllowCredentials: true,
+})
 
 func main() {
 	if err := logging.Init("debug"); err != nil {
@@ -47,9 +55,14 @@ func main() {
 	// USER ENDPOINT END.
 
 	// TRANSACTION ENDPOINT START.
-	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))        // Create Transaction
-	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler)) // Get Transactions with filters
-	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler)) // Get transation by ID.
+	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))              // Create Transaction
+	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler))       // Get Transactions with filters
+	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler))       // Get transation by ID
+	server.Handle("POST /image-process", corsConf.Handler(iz.Bind(api.ProcessImageHandler))) // Take image from user, and returns possible transaction fields
+	server.Handle("OPTIONS /image-process", corsConf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
 	// TRANSACTION ENDPOINT END.
 
 	// EXPENSE CATEGORY ENDPOINT START.

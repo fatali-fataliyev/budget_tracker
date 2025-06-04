@@ -30,3 +30,4 @@ go.work.sum
 local/
 logging/logs/
 .air.toml
+testImageProcess.html
