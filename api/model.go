@@ -129,6 +129,12 @@ type ImageToTransactionResponse struct {
 	CreatedDate []string `json:"created_date"`
 }
 
+type ProcessedImageResponseItem struct {
+	Amounts          []float64 `json:"amounts"`
+	CurrenciesISO    []string  `json:"currencies_iso"`
+	CurrenciesSymbol []string  `json:"currencies_symbol"`
+}
+
 func httpStatusFromError(err error) int {
 	switch {
 	case errors.Is(err, appErrors.ErrNotFound):
@@ -186,6 +192,14 @@ func IncomeCategoryToHttp(category budget.IncomeCategoryResponse) IncomeCategory
 		UpdatedAt:    category.UpdatedAt.Format(time.RFC3339),
 		Note:         category.Note,
 		CreatedBy:    category.CreatedBy,
+	}
+}
+
+func ProcessedImageToHttp(processedImg budget.ProcessedImageResponse) ProcessedImageResponseItem {
+	return ProcessedImageResponseItem{
+		Amounts:          processedImg.Amounts,
+		CurrenciesISO:    processedImg.CurrenciesISO,
+		CurrenciesSymbol: processedImg.CurrenciesSymbol,
 	}
 }
 
