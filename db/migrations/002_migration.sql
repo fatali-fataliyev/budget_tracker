@@ -1,9 +1,0 @@
-USE `budget_tracker`;
-
-
-
-CREATE TABLE IF NOT EXISTS `migration` (
-    `id` INT AUTO_INCREMENT PRIMARY KEY,
-    `migration_name` VARCHAR(255) NOT NULL DEFAULT "-" UNIQUE,
-    `applied_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-)

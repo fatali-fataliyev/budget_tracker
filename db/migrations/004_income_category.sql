@@ -1,5 +1,3 @@
-USE `budget_tracker`;
-
 CREATE TABLE IF NOT EXISTS `income_category` (
     `id` CHAR(36) NOT NULL PRIMARY KEY,
     `name` VARCHAR(255) NOT NULL,

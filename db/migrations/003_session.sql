@@ -1,5 +1,3 @@
-USE `budget_tracker`;
-
 CREATE TABLE IF NOT EXISTS `session` (
     `id` CHAR(36) NOT NULL PRIMARY KEY,
     `token` VARCHAR(255) NOT NULL UNIQUE,

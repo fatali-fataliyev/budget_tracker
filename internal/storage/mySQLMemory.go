@@ -29,19 +29,67 @@ func Init() (*sql.DB, error) {
 	password := os.Getenv("DBPASS")
 	dbname := os.Getenv("DBNAME")
 
-	logging.Logger.Info("initializing database...")
+	logging.Logger.Info("connecting to root MySQL...")
 
-	db, err := sql.Open("mysql", username+":"+password+"@tcp(localhost:3306)/"+dbname)
+	dsnWithoutDb := fmt.Sprintf("%s:%s@tcp(localhost:3306)/", username, password)
+	rootDb, err := sql.Open("mysql", dsnWithoutDb)
+	if err != nil {
+		logging.Logger.Errorf("failed to connect root mysql: %v", err)
+		return nil, fmt.Errorf("failed to connect root mysql")
+	}
+	defer rootDb.Close()
+	logging.Logger.Info("connected to root MySQL")
+
+	var isFirstTime bool
+
+	var exists string
+	checkQuery := "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?"
+	err = rootDb.QueryRow(checkQuery, dbname).Scan(&exists)
+	if err == sql.ErrNoRows {
+		logging.Logger.Infof("Database %s does not exist, creating...", dbname)
+
+		createDbSql := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;", dbname)
+		_, err = rootDb.Exec(createDbSql)
+		if err != nil {
+			logging.Logger.Errorf("failed to create database: %v", err)
+			return nil, fmt.Errorf("failed to create database")
+		}
+
+		isFirstTime = true
+	} else if err != nil {
+		logging.Logger.Errorf("failed to check database existence: %v", err)
+		return nil, fmt.Errorf("failed to check database existence")
+	} else {
+		logging.Logger.Infof("Database [%s] already exists", dbname)
+	}
+
+	dbTimezoneSql := fmt.Sprintf("SET GLOBAL time_zone = '+00:00'")
+	_, err = rootDb.Exec(dbTimezoneSql)
+	if err != nil {
+		logging.Logger.Errorf("failed to set timezone: %v", err)
+		return nil, fmt.Errorf("failed to create database")
+	}
+
+	logging.Logger.Info("connecting to database")
+	dsnWithDb := fmt.Sprintf("%s:%s@tcp(localhost:3306)/%s?multiStatements=true", username, password, dbname)
+	db, err := sql.Open("mysql", dsnWithDb)
 	if err != nil {
 		logging.Logger.Errorf("failed to open database: %v", err)
 		return nil, fmt.Errorf("failed to open database")
 	}
+	logging.Logger.Info("connected to database")
+	logging.Logger.Info("ping database...")
 
-	for err := db.Ping(); err != nil; {
+	for {
+		if err := db.Ping(); err == nil {
+			break
+		}
+		logging.Logger.Warnf("waiting for database...")
 		time.Sleep(3 * time.Second)
 	}
 
-	logging.Logger.Info("connected to database")
+	logging.Logger.Info("ping response is positive")
+
 	logging.Logger.Info("running migrations")
 
 	migrationFiles, err := getMigrationFiles("db/migrations")
@@ -50,16 +98,11 @@ func Init() (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to run migrations")
 	}
 
-	fmt.Println("migration file names: ", migrationFiles)
-
-	lastAppliedMigration, err := getLastAppliedMigration(db)
+	lastAppliedMigration, err := getLastAppliedMigration(db, isFirstTime)
 	if err != nil {
 		logging.Logger.Errorf("failed to get last applied migration name: %v", err)
-		fmt.Println("failed to run migrations")
 		return nil, nil
 	}
-
-	fmt.Println(lastAppliedMigration)
 
 	newMigrations := filterNewMigrations(migrationFiles, lastAppliedMigration)
 
@@ -70,7 +113,7 @@ func Init() (*sql.DB, error) {
 
 	for _, migrationFile := range newMigrations {
 		logging.Logger.Info("applying migration: ", migrationFile)
-		migrationContent, err := os.ReadFile(filepath.Join("db/migrations/%s", migrationFile))
+		migrationContent, err := os.ReadFile(filepath.Join("db/migrations/", migrationFile))
 		if err != nil {
 			logging.Logger.Errorf("failed to read this '%s' migration file, error: %v", migrationFile, err)
 			return nil, fmt.Errorf("failed to run migrations")
@@ -104,10 +147,20 @@ func getMigrationFiles(dir string) ([]string, error) {
 	return migrationFiles, nil
 }
 
-func getLastAppliedMigration(db *sql.DB) (string, error) {
+func getLastAppliedMigration(db *sql.DB, isFirstTime bool) (string, error) {
+	if isFirstTime {
+		migrationCreateSql := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `migration` (id int auto_increment primary key, migration_name varchar(255) not null unique, applied_at timestamp not null default current_timestamp);")
+		_, err := db.Exec(migrationCreateSql)
+		if err != nil {
+			logging.Logger.Errorf("failed to create migration table for first time: %v", err)
+			return "", fmt.Errorf("failed to create database")
+		}
+		return "001_migration.sql", nil
+	}
+
 	var lastMigration string
 	err := db.QueryRow("SELECT migration_name FROM migration ORDER BY migration_name DESC LIMIT 1").Scan(&lastMigration)
-	if err != sql.ErrNoRows {
+	if err == sql.ErrNoRows {
 		return "", nil
 	}
 	return lastMigration, err
