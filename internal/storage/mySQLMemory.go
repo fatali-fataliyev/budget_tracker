@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +24,7 @@ func Init() (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load 'env' variables for database: %w", err)
 	}
+
 	username := os.Getenv("DBUSER")
 	password := os.Getenv("DBPASS")
 	dbname := os.Getenv("DBNAME")
@@ -37,8 +40,116 @@ func Init() (*sql.DB, error) {
 	for err := db.Ping(); err != nil; {
 		time.Sleep(3 * time.Second)
 	}
-	logging.Logger.Info("Connected to database")
+
+	logging.Logger.Info("connected to database")
+	logging.Logger.Info("running migrations")
+
+	migrationFiles, err := getMigrationFiles("db/migrations")
+	if err != nil {
+		logging.Logger.Errorf("failed to get migration files: %v", err)
+		return nil, fmt.Errorf("failed to run migrations")
+	}
+
+	fmt.Println("migration file names: ", migrationFiles)
+
+	lastAppliedMigration, err := getLastAppliedMigration(db)
+	if err != nil {
+		logging.Logger.Errorf("failed to get last applied migration name: %v", err)
+		fmt.Println("failed to run migrations")
+		return nil, nil
+	}
+
+	fmt.Println(lastAppliedMigration)
+
+	newMigrations := filterNewMigrations(migrationFiles, lastAppliedMigration)
+
+	if len(newMigrations) == 0 {
+		logging.Logger.Info("no new migration")
+		return db, nil
+	}
+
+	for _, migrationFile := range newMigrations {
+		logging.Logger.Info("applying migration: ", migrationFile)
+		migrationContent, err := os.ReadFile(filepath.Join("db/migrations/%s", migrationFile))
+		if err != nil {
+			logging.Logger.Errorf("failed to read this '%s' migration file, error: %v", migrationFile, err)
+			return nil, fmt.Errorf("failed to run migrations")
+		}
+
+		err = applyMigration(db, migrationFile, string(migrationContent))
+		if err != nil {
+			logging.Logger.Errorf("failed to apply this '%s' migration file, error: ", err)
+			return nil, fmt.Errorf("failed to run migrations")
+		}
+
+	}
+	logging.Logger.Info("all migrations applied successfully")
 	return db, nil
+}
+
+func getMigrationFiles(dir string) ([]string, error) {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var migrationFiles []string
+	for _, file := range files {
+		if file.IsDir() != true && strings.HasSuffix(file.Name(), ".sql") {
+			migrationFiles = append(migrationFiles, file.Name())
+		}
+	}
+
+	sort.Strings(migrationFiles)
+	return migrationFiles, nil
+}
+
+func getLastAppliedMigration(db *sql.DB) (string, error) {
+	var lastMigration string
+	err := db.QueryRow("SELECT migration_name FROM migration ORDER BY migration_name DESC LIMIT 1").Scan(&lastMigration)
+	if err != sql.ErrNoRows {
+		return "", nil
+	}
+	return lastMigration, err
+}
+
+func filterNewMigrations(all []string, lastApplied string) []string {
+	if lastApplied == "" {
+		return all
+	}
+
+	var result []string
+	for _, migration := range all {
+		if migration > lastApplied {
+			result = append(result, migration)
+		}
+	}
+	return result
+}
+
+func applyMigration(db *sql.DB, name, sqlContent string) error {
+	txn, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+
+	_, err = db.Exec(sqlContent)
+	if err != nil {
+		txn.Rollback()
+		return fmt.Errorf("migration failed, rolled back: %w", err)
+	}
+
+	_, err = db.Exec("INSERT INTO migration (migration_name) VALUES (?)", name)
+	if err != nil {
+		txn.Rollback()
+		return fmt.Errorf("failed to record migration, rolled back: %w", err)
+	}
+
+	if err = txn.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }
 
 type MySQLStorage struct {
