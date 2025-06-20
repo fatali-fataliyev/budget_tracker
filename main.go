@@ -82,7 +82,7 @@ func main() {
 	server.HandleFunc("PUT /category/income", iz.Bind(api.UpdateIncomeCategoryHandler))         // Update Income Category
 	server.HandleFunc("DELETE /category/income/{id}", iz.Bind(api.DeleteIncomeCategoryHandler)) // Delete Income Category
 
-	port := "8080"
+	port := "8060"
 	fmt.Println("Starting server on port", port)
 	err = http.ListenAndServe(":"+port, server)
 	if err != nil {
