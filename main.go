@@ -63,9 +63,6 @@ func main() {
 	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler)) // Get Transactions with filters
 	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler)) // Get transation by ID
 	server.Handle("POST /image-process", iz.Bind(api.ProcessImageHandler))             // Take image from user, and returns possible transaction fields
-	server.Handle("OPTIONS /image-process", corsConf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})))
 
 	// TRANSACTION ENDPOINT END.
 
@@ -84,7 +81,8 @@ func main() {
 
 	port := "8060"
 	fmt.Println("Starting server on port", port)
-	err = http.ListenAndServe(":"+port, server)
+	handlerwithCors := corsConf.Handler(server)
+	err = http.ListenAndServe(":"+port, handlerwithCors) // Start the server
 	if err != nil {
 		logging.Logger.Errorf("failed to start server: %v", err)
 		fmt.Println("failed to start server")
