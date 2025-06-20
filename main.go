@@ -52,10 +52,10 @@ func main() {
 	api := api.NewApi(&bt)
 
 	// USER ENDPOINT START.
-	server.HandleFunc("POST /register", iz.Bind(api.SaveUserHandler))           // Create User
-	server.HandleFunc("POST /login", iz.Bind(api.LoginUserHandler))             // Login User
-	server.HandleFunc("GET /logout", iz.Bind(api.LogoutUserHandler))            // Logout User
-	server.HandleFunc("DELETE /remove-account", iz.Bind(api.DeleteUserHandler)) // Get User by token
+	server.HandleFunc("POST /register", iz.Bind(api.SaveUserHandler))         // Create User
+	server.HandleFunc("POST /login", iz.Bind(api.LoginUserHandler))           // Login User
+	server.HandleFunc("GET /logout", iz.Bind(api.LogoutUserHandler))          // Logout User
+	server.HandleFunc("POST /remove-account", iz.Bind(api.DeleteUserHandler)) // Get User by token
 	// USER ENDPOINT END.
 
 	// TRANSACTION ENDPOINT START.
