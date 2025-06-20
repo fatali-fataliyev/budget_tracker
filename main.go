@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/0xcafe-io/iz"
 	"github.com/fatali-fataliyev/budget_tracker/api"
@@ -79,7 +80,11 @@ func main() {
 	server.HandleFunc("PUT /category/income", iz.Bind(api.UpdateIncomeCategoryHandler))         // Update Income Category
 	server.HandleFunc("DELETE /category/income/{id}", iz.Bind(api.DeleteIncomeCategoryHandler)) // Delete Income Category
 
-	port := "8060"
+	port := os.Getenv("PORT")
+	if port == "" {
+		logging.Logger.Info("PORT environment variable not set, using default port 8060")
+		port = "8060"
+	}
 	fmt.Println("Starting server on port", port)
 	handlerwithCors := corsConf.Handler(server)
 	err = http.ListenAndServe(":"+port, handlerwithCors) // Start the server
