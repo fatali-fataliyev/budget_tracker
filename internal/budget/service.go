@@ -172,21 +172,21 @@ func (bt *BudgetTracker) SaveUser(ctx context.Context, newUser auth.NewUser) (st
 	if newUser.UserName == "" {
 		return "", appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Username cannot be empty!"),
+			Message:    "Username cannot be empty!",
 			IsFeedBack: false,
 		}
 	}
 	if newUser.PasswordPlain == "" {
 		return "", appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Password cannot be empty!"),
+			Message:    "Password cannot be empty!",
 			IsFeedBack: false,
 		}
 	}
 	if newUser.Email == "" {
 		return "", appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Password cannot be empty!"),
+			Message:    "Password cannot be empty!",
 			IsFeedBack: false,
 		}
 	}
@@ -198,7 +198,7 @@ func (bt *BudgetTracker) SaveUser(ctx context.Context, newUser auth.NewUser) (st
 	if isUserExists {
 		return "", appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Username already taken!"),
+			Message:    "Username already taken!",
 			IsFeedBack: false,
 		}
 	}
@@ -211,7 +211,7 @@ func (bt *BudgetTracker) SaveUser(ctx context.Context, newUser auth.NewUser) (st
 	if isEmailTaken {
 		return "", appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Email already taken!"),
+			Message:    "Email already taken!",
 			IsFeedBack: false,
 		}
 	}
@@ -330,7 +330,7 @@ func (bt *BudgetTracker) ProcessImage(ctx context.Context, imageRawText string) 
 	if imageRawText == "" {
 		return ProcessedImageResponse{}, appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Image raw text is empty."),
+			Message:    "Image raw text is empty.",
 			IsFeedBack: false,
 		}
 	}
@@ -372,7 +372,7 @@ func (bt *BudgetTracker) SaveExpenseCategory(ctx context.Context, userId string,
 	if category.Name == "" {
 		return appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category cannot be empty!"),
+			Message:    "Category cannot be empty!",
 			IsFeedBack: false,
 		}
 	}
