@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,7 @@ import (
 var Logger *logrus.Logger
 
 func Init(level string) error {
+	// Logger.WithFields(logrus.Fields{"traceID": "blabala"}).Info("something")
 	Logger = logrus.New()
 	err := gotenv.Load()
 	if err != nil {
@@ -62,6 +64,14 @@ func Init(level string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
-	Logger.SetOutput(file)
+
+	Logger.SetOutput(io.MultiWriter(os.Stdout, file))
 	return nil
 }
+
+// func Info(ctx context.Context, msg string) {
+// 	traceID, ok := ctx.Value("traceID").(string)
+// 	_, _ = traceID, ok
+// 	// TODO extract traceID which is injected in middlewhare
+// 	Logger.WithFields(logrus.Fields{"traceUD": "hardcodedTracd"}).Info(msg)
+// }

@@ -1,6 +1,7 @@
 package budget
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 
 	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
+	"github.com/fatali-fataliyev/budget_tracker/internal/contextutil"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
 	"github.com/google/uuid"
 )
@@ -45,46 +47,60 @@ func NewBudgetTracker(s Storage) BudgetTracker {
 }
 
 type Storage interface {
-	SaveUser(newUser auth.User) error
-	SaveSession(session auth.Session) error
-	SaveExpenseCategory(category ExpenseCategory) error
-	SaveIncomeCategory(category IncomeCategory) error
-	CheckSession(token string) (userId string, err error)
-	UpdateSession(userId string, expireAt time.Time) error
-	GetSessionByToken(token string) (auth.Session, error)
-	SaveTransaction(t Transaction) error
-	GetFilteredTransactions(userID string, filters *TransactionList) ([]Transaction, error)
-	GetFilteredExpenseCategories(userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error)
-	GetFilteredIncomeCategories(userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error)
-	GetTransactionById(userID string, transacationID string) (Transaction, error)
-	ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error)
-	IsUserExists(username string) (bool, error)
-	IsEmailConfirmed(emailAddress string) (bool, error)
-	UpdateExpenseCategory(userId string, fields UpdateExpenseCategoryRequest) (*ExpenseCategoryResponse, error)
-	DeleteExpenseCategory(userId string, categoryId string) error
-	DeleteIncomeCategory(userId string, categoryId string) error
-	UpdateIncomeCategory(userId string, fields UpdateIncomeCategoryRequest) (*IncomeCategoryResponse, error)
-	LogoutUser(userId string, token string) error
+	SaveUser(ctx context.Context, newUser auth.User) error
+	SaveSession(ctx context.Context, session auth.Session) error
+	SaveExpenseCategory(ctx context.Context, category ExpenseCategory) error
+	SaveIncomeCategory(ctx context.Context, category IncomeCategory) error
+	CheckSession(ctx context.Context, token string) (userId string, err error)
+	UpdateSession(ctx context.Context, userId string, expireAt time.Time) error
+	GetSessionByToken(ctx context.Context, token string) (auth.Session, error)
+	SaveTransaction(ctx context.Context, t Transaction) error
+	GetFilteredTransactions(ctx context.Context, userID string, filters *TransactionList) ([]Transaction, error)
+	GetFilteredExpenseCategories(ctx context.Context, userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error)
+	GetFilteredIncomeCategories(ctx context.Context, userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error)
+	GetTransactionById(ctx context.Context, userID string, transacationID string) (Transaction, error)
+	ValidateUser(ctx context.Context, credentials auth.UserCredentialsPure) (auth.User, error)
+	IsUserExists(ctx context.Context, username string) (bool, error)
+	IsEmailConfirmed(ctx context.Context, emailAddress string) (bool, error)
+	UpdateExpenseCategory(ctx context.Context, userId string, fields UpdateExpenseCategoryRequest) (*ExpenseCategoryResponse, error)
+	DeleteExpenseCategory(ctx context.Context, userId string, categoryId string) error
+	DeleteIncomeCategory(ctx context.Context, userId string, categoryId string) error
+	UpdateIncomeCategory(ctx context.Context, userId string, fields UpdateIncomeCategoryRequest) (*IncomeCategoryResponse, error)
+	LogoutUser(ctx context.Context, userId string, token string) error
+	DeleteUser(ctx context.Context, userId string, deleteReq auth.DeleteUser) error
 	GetStorageType() string
 }
 
-func (bt *BudgetTracker) ValidateUser(credentials auth.UserCredentialsPure) (auth.User, error) {
-	user, err := bt.storage.ValidateUser(credentials)
+func (bt *BudgetTracker) ValidateUser(ctx context.Context, credentials auth.UserCredentialsPure) (auth.User, error) {
+	if credentials.UserName == "" {
+		return auth.User{}, appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Username cannot be empty!",
+		}
+	}
+	if credentials.PasswordPlain == "" {
+		return auth.User{}, appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Password cannot be empty!",
+		}
+	}
+
+	user, err := bt.storage.ValidateUser(ctx, credentials)
 	if err != nil {
-		return auth.User{}, fmt.Errorf("failed to validate user: %w", err)
+		return auth.User{}, err
 	}
 	return user, nil
 }
 
-func (bt *BudgetTracker) GenerateSession(credentialsPure auth.UserCredentialsPure) (string, error) {
-	user, err := bt.storage.ValidateUser(credentialsPure)
+func (bt *BudgetTracker) GenerateSession(ctx context.Context, credentialsPure auth.UserCredentialsPure) (string, error) {
+	user, err := bt.storage.ValidateUser(ctx, credentialsPure)
 	if err != nil {
-		return "", fmt.Errorf("%w", err)
+		return "", err
 	}
 
 	tokenByte := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, tokenByte); err != nil {
-		return "", fmt.Errorf("failed to generate new session: %w", err)
+		return "", err
 	}
 
 	token := hex.EncodeToString(tokenByte)
@@ -99,22 +115,24 @@ func (bt *BudgetTracker) GenerateSession(credentialsPure auth.UserCredentialsPur
 		UserID:    user.ID,
 	}
 
-	err = bt.storage.SaveSession(session)
+	err = bt.storage.SaveSession(ctx, session)
 	if err != nil {
-		return "", fmt.Errorf("failed to save session: %w", err)
+		return "", err
 	}
 	return token, nil
 }
 
-func (bt *BudgetTracker) CheckSession(token string) (string, error) {
-	session, err := bt.storage.GetSessionByToken(token)
+func (bt *BudgetTracker) CheckSession(ctx context.Context, token string) (string, error) {
+	traceID := contextutil.TraceIDFromContext(ctx)
+	session, err := bt.storage.GetSessionByToken(ctx, token)
 	if err != nil {
-		return "", fmt.Errorf("failed to get session by token: %w", err)
+		return "", err
 	}
 
-	userId, err := bt.storage.CheckSession(token)
+	logging.Logger.Infof("[TraceID=%s] | Service.CheckSession() Checking exists session", traceID)
+	userId, err := bt.storage.CheckSession(ctx, token)
 	if err != nil {
-		return "", fmt.Errorf("failed to check session: %w", err)
+		return "", err
 	}
 
 	now := time.Now().UTC()
@@ -122,10 +140,10 @@ func (bt *BudgetTracker) CheckSession(token string) (string, error) {
 
 	if daysUntilExpiry <= 5 {
 		newExpireAt := time.Now().AddDate(0, 1, 0)
-
-		err := bt.storage.UpdateSession(userId, newExpireAt)
+		logging.Logger.Infof("[TraceID=%s] | Service.CheckSession() calling storage.UpdateSession", traceID)
+		err := bt.storage.UpdateSession(ctx, userId, newExpireAt)
 		if err != nil {
-			return "", fmt.Errorf("failed to update session: %w", err)
+			return "", err
 		}
 		return userId, nil
 	}
@@ -133,32 +151,73 @@ func (bt *BudgetTracker) CheckSession(token string) (string, error) {
 	return userId, nil
 }
 
-func (bt *BudgetTracker) IsUserExists(username string) (bool, error) {
-	result, err := bt.storage.IsUserExists(username)
+func (bt *BudgetTracker) IsUserExists(ctx context.Context, username string) (bool, error) {
+	if username == "" {
+		return false, appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Username cannot be empty",
+		}
+	}
+
+	traceID := contextutil.TraceIDFromContext(ctx)
+	logging.Logger.Infof("[TraceID=%s] | Service.IsUserExists calling for username=%s to storage layer", traceID, username)
+	result, err := bt.storage.IsUserExists(ctx, username)
 	if err != nil {
-		return false, fmt.Errorf("failed to check user existance: %w", err)
+		return false, err
 	}
 	return result, nil
 }
 
-func (bt *BudgetTracker) SaveUser(newUser auth.NewUser) (string, error) {
-	isUserExists, err := bt.IsUserExists(newUser.UserName)
+func (bt *BudgetTracker) SaveUser(ctx context.Context, newUser auth.NewUser) (string, error) {
+	if newUser.UserName == "" {
+		return "", appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Username cannot be empty!"),
+			IsFeedBack: false,
+		}
+	}
+	if newUser.PasswordPlain == "" {
+		return "", appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Password cannot be empty!"),
+			IsFeedBack: false,
+		}
+	}
+	if newUser.Email == "" {
+		return "", appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Password cannot be empty!"),
+			IsFeedBack: false,
+		}
+	}
+
+	isUserExists, err := bt.IsUserExists(ctx, newUser.UserName)
 	if err != nil {
-		return "", fmt.Errorf("failed to check username availability: %w", err)
+		return "", err
 	}
 	if isUserExists {
-		return "", fmt.Errorf("%w: this '%s' username already taken", appErrors.ErrConflict, newUser.UserName)
+		return "", appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Username already taken!"),
+			IsFeedBack: false,
+		}
 	}
-	isEmailTaken, err := bt.storage.IsEmailConfirmed(newUser.Email)
+	isEmailTaken, err := bt.storage.IsEmailConfirmed(ctx, newUser.Email)
+	traceID := contextutil.TraceIDFromContext(ctx)
+	logging.Logger.Infof("[TraceID=%s] | Service calling IsEmailConfirmed from storage layer", traceID)
 	if err != nil {
-		return "", fmt.Errorf("failed to check email availability: %w", err)
+		return "", err
 	}
 	if isEmailTaken {
-		return "", fmt.Errorf("%w: this: '%s' email address already taken and confirmed, try to register with another email.", appErrors.ErrConflict, newUser.Email)
+		return "", appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Email already taken!"),
+			IsFeedBack: false,
+		}
 	}
-	hashedPassword, err := auth.HashPassword(newUser.PasswordPlain)
+	hashedPassword, err := auth.HashPassword(ctx, newUser.PasswordPlain)
 	if err != nil {
-		return "", fmt.Errorf("failed to hash password: %w", err)
+		return "", err
 	}
 
 	user := auth.User{
@@ -170,8 +229,8 @@ func (bt *BudgetTracker) SaveUser(newUser auth.NewUser) (string, error) {
 		PendingEmail:   strings.ToLower(newUser.Email),
 	}
 
-	if err := bt.storage.SaveUser(user); err != nil {
-		return "", fmt.Errorf("failed to registration: %w", err)
+	if err := bt.storage.SaveUser(ctx, user); err != nil {
+		return "", err
 	}
 
 	credentials := auth.UserCredentialsPure{
@@ -179,10 +238,15 @@ func (bt *BudgetTracker) SaveUser(newUser auth.NewUser) (string, error) {
 		PasswordPlain: newUser.PasswordPlain,
 	}
 
-	token, err := bt.GenerateSession(credentials)
+	token, err := bt.GenerateSession(ctx, credentials)
 	if err != nil {
-		return "", fmt.Errorf("registration successfully but failed to generate session: %w | try login", err)
+		return "", appErrors.ErrorResponse{
+			Code:       appErrors.ErrInternal,
+			Message:    "Registration completed but something went wrong, try log in please.",
+			IsFeedBack: false,
+		}
 	}
+
 	return token, nil
 }
 
@@ -199,30 +263,53 @@ func CapitalizeFullName(name string) string {
 	return strings.Join(words, " ")
 }
 
-func (bt *BudgetTracker) SaveTransaction(userId string, transaction TransactionRequest) error {
+func (bt *BudgetTracker) SaveTransaction(ctx context.Context, userId string, transaction TransactionRequest) error {
+	if transaction.CategoryName == "" {
+		return appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Category name cannot be empty!",
+		}
+	}
 	if IsFloatZero(transaction.Amount) {
-		return fmt.Errorf("%w: transaction amount is zero or very close to zero.", appErrors.ErrInvalidInput)
+		return appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    "Transaction amount is zero or very close to zero, please enter valid transaction amount.",
+			IsFeedBack: false,
+		}
 	}
 	if transaction.Amount > MAX_TRANSACTION_AMOUNT_LIMIT {
-		return fmt.Errorf("%w: maximum allowed amount per transaction is: %d", appErrors.ErrInvalidInput, MAX_TRANSACTION_AMOUNT_LIMIT)
+		return appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Maximum allowed amount per transaction is %d", MAX_TRANSACTION_AMOUNT_LIMIT),
+			IsFeedBack: false,
+		}
 	}
 	if len(transaction.CategoryName) > MAX_TRANSACTION_CATEGORY_NAME_LENGTH {
-		return fmt.Errorf("%w: category name so long.", appErrors.ErrInvalidInput)
+		return appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category name so long, maxiumum allowed cateogory name length %d", MAX_TRANSACTION_CATEGORY_NAME_LENGTH),
+			IsFeedBack: false,
+		}
 	}
 	if len(transaction.Currency) > MAX_TRANSACTION_CURRENCY_LENGTH {
-		return fmt.Errorf("%w: currency so long, maximum allowed currency length is: %d", appErrors.ErrInvalidInput, MAX_TRANSACTION_CURRENCY_LENGTH)
+		return appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Currency so long, maximum allowed currency length is %d", MAX_TRANSACTION_CURRENCY_LENGTH),
+			IsFeedBack: false,
+		}
 	}
 	if len(transaction.Note) > MAX_TRANSACTION_NOTE_LENGTH {
-		return fmt.Errorf("%w: note so long, maximum allowed length is: %d", appErrors.ErrInvalidInput, MAX_TRANSACTION_NOTE_LENGTH)
-	}
-	if transaction.CategoryType != "+" && transaction.CategoryType != "-" {
-		return fmt.Errorf("%w: invalid category type: %s", appErrors.ErrInvalidInput, transaction.CategoryType)
+		return appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Note so long, maximum allowed note length is %d", MAX_TRANSACTION_NOTE_LENGTH),
+			IsFeedBack: false,
+		}
 	}
 
 	now := time.Now().UTC()
 	txn := Transaction{
 		ID:           uuid.New().String(),
-		CategoryName: transaction.CategoryName,
+		CategoryName: strings.ToLower(transaction.CategoryName),
 		CategoryType: transaction.CategoryType,
 		Amount:       transaction.Amount,
 		Currency:     transaction.Currency,
@@ -231,15 +318,21 @@ func (bt *BudgetTracker) SaveTransaction(userId string, transaction TransactionR
 		CreatedBy:    userId,
 	}
 
-	if err := bt.storage.SaveTransaction(txn); err != nil {
-		return fmt.Errorf("failed to save transaction to db: %w", err)
+	if err := bt.storage.SaveTransaction(ctx, txn); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (bt *BudgetTracker) ProcessImage(imageRawText string) (ProcessedImageResponse, error) {
+func (bt *BudgetTracker) ProcessImage(ctx context.Context, imageRawText string) (ProcessedImageResponse, error) {
+	traceID := contextutil.TraceIDFromContext(ctx)
+
 	if imageRawText == "" {
-		return ProcessedImageResponse{}, fmt.Errorf("empty raw text")
+		return ProcessedImageResponse{}, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Image raw text is empty."),
+			IsFeedBack: false,
+		}
 	}
 
 	var result ProcessedImageResponse
@@ -253,7 +346,7 @@ func (bt *BudgetTracker) ProcessImage(imageRawText string) (ProcessedImageRespon
 		if err == nil {
 			result.Amounts = append(result.Amounts, num)
 		}
-		logging.Logger.Warn("failed to convert string number to float64 from ProcessImage() function, error: %v", err)
+		logging.Logger.Warnf("[TraceID=%s] | failed to convert string number to float64 from Service.ProcessImage() function, Error: %v", traceID, err)
 	}
 
 	symbolRegex := regexp.MustCompile(`[$€£¥₹₽₩₪₫₴₦₵₲₺₡₨៛฿₸]`)
@@ -273,21 +366,35 @@ func (bt *BudgetTracker) ProcessImage(imageRawText string) (ProcessedImageRespon
 	return result, nil
 }
 
-func (bt *BudgetTracker) SaveExpenseCategory(userId string, category ExpenseCategoryRequest) error {
+func (bt *BudgetTracker) SaveExpenseCategory(ctx context.Context, userId string, category ExpenseCategoryRequest) error {
+	traceID := contextutil.TraceIDFromContext(ctx)
+
 	if category.Name == "" {
-		return fmt.Errorf("%w: category name is empty", appErrors.ErrInvalidInput)
+		return appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category cannot be empty!"),
+			IsFeedBack: false,
+		}
 	}
 	if category.MaxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
-		return fmt.Errorf("%w: category max amount is too large, the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
+		return appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category maximum amount is too large, allowed maximum amount is %2.f", MAX_CATEGORY_AMOUNT_LIMIT),
+			IsFeedBack: false,
+		}
 	}
 	if len(category.Name) > MAX_CATEGORY_NAME_LENGTH {
-		return fmt.Errorf("%w: category name is too long for category, the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
+		return appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
+			IsFeedBack: false,
+		}
 	}
 
 	now := time.Now().UTC()
 	categoryItem := ExpenseCategory{
 		ID:        uuid.New().String(),
-		Name:      category.Name,
+		Name:      strings.ToLower(category.Name),
 		MaxAmount: category.MaxAmount,
 		PeriodDay: category.PeriodDay,
 		CreatedAt: now,
@@ -297,28 +404,35 @@ func (bt *BudgetTracker) SaveExpenseCategory(userId string, category ExpenseCate
 		Type:      category.Type,
 	}
 
-	if err := bt.storage.SaveExpenseCategory(categoryItem); err != nil {
+	if err := bt.storage.SaveExpenseCategory(ctx, categoryItem); err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | storage.SaveExpenseCateogory() failed", traceID)
 		return err
 	}
 
 	return nil
 }
 
-func (bt *BudgetTracker) SaveIncomeCategory(userId string, category IncomeCategoryRequest) error {
-	if category.Name == "" {
-		return fmt.Errorf("%w: category name is empty", appErrors.ErrInvalidInput)
-	}
+func (bt *BudgetTracker) SaveIncomeCategory(ctx context.Context, userId string, category IncomeCategoryRequest) error {
 	if category.TargetAmount > MAX_TARGET_AMOUNT_LIMIT {
-		return fmt.Errorf("%w: category max amount is too large; the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
+		return appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category maximum amount is too large, allowed maximum amount is %2.f", MAX_CATEGORY_AMOUNT_LIMIT),
+			IsFeedBack: false,
+		}
 	}
+
 	if len(category.Name) > MAX_CATEGORY_NAME_LENGTH {
-		return fmt.Errorf("%w: category name is too long for category; the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
+		return appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
+			IsFeedBack: false,
+		}
 	}
 
 	now := time.Now().UTC()
 	categoryItem := IncomeCategory{
 		ID:           uuid.New().String(),
-		Name:         category.Name,
+		Name:         strings.ToLower(category.Name),
 		TargetAmount: category.TargetAmount,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -327,16 +441,16 @@ func (bt *BudgetTracker) SaveIncomeCategory(userId string, category IncomeCatego
 		Type:         category.Type,
 	}
 
-	if err := bt.storage.SaveIncomeCategory(categoryItem); err != nil {
+	if err := bt.storage.SaveIncomeCategory(ctx, categoryItem); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (bt *BudgetTracker) GetFilteredIncomeCategories(userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error) {
-	categoriesRaw, err := bt.storage.GetFilteredIncomeCategories(userID, filters)
+func (bt *BudgetTracker) GetFilteredIncomeCategories(ctx context.Context, userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error) {
+	categoriesRaw, err := bt.storage.GetFilteredIncomeCategories(ctx, userID, filters)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get income categories: %w", err)
+		return nil, err
 	}
 
 	var categories []IncomeCategoryResponse
@@ -364,10 +478,10 @@ func (bt *BudgetTracker) GetFilteredIncomeCategories(userID string, filters *Inc
 	return categories, nil
 }
 
-func (bt *BudgetTracker) GetFilteredExpenseCategories(userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error) {
-	categoriesRaw, err := bt.storage.GetFilteredExpenseCategories(userID, filters)
+func (bt *BudgetTracker) GetFilteredExpenseCategories(ctx context.Context, userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error) {
+	categoriesRaw, err := bt.storage.GetFilteredExpenseCategories(ctx, userID, filters)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get expense categories: %w", err)
+		return nil, err
 	}
 
 	var categories []ExpenseCategoryResponse
@@ -400,21 +514,33 @@ func (bt *BudgetTracker) GetFilteredExpenseCategories(userID string, filters *Ex
 	return categories, nil
 }
 
-func (bt *BudgetTracker) UpdateExpenseCategory(userId string, fields UpdateExpenseCategoryRequest) (*ExpenseCategoryResponse, error) {
+func (bt *BudgetTracker) UpdateExpenseCategory(ctx context.Context, userId string, fields UpdateExpenseCategoryRequest) (*ExpenseCategoryResponse, error) {
 	if fields.NewMaxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
-		return nil, fmt.Errorf("%w: category max amount is too large, the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
+		return nil, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category new maximum is too larger, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
+			IsFeedBack: false,
+		}
 	}
 	if len(fields.NewName) > MAX_CATEGORY_NAME_LENGTH {
-		return nil, fmt.Errorf("%w: category name is too long for category, the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
+		return nil, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category new name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
+			IsFeedBack: false,
+		}
 	}
 	if len(fields.NewNote) > MAX_TRANSACTION_NOTE_LENGTH {
-		return nil, fmt.Errorf("%w: note so long, maximum allowed length is: %d", appErrors.ErrInvalidInput, MAX_TRANSACTION_NOTE_LENGTH)
+		return nil, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category new note so long, allowed maximum length is %d", MAX_TRANSACTION_NOTE_LENGTH),
+			IsFeedBack: false,
+		}
 	}
 
 	fields.UpdateTime = time.Now().UTC()
-	categoryRaw, err := bt.storage.UpdateExpenseCategory(userId, fields)
+	categoryRaw, err := bt.storage.UpdateExpenseCategory(ctx, userId, fields)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update expense category: %w", err)
+		return nil, err
 	}
 	var usagePercent int
 	if categoryRaw.MaxAmount > 0 {
@@ -440,21 +566,33 @@ func (bt *BudgetTracker) UpdateExpenseCategory(userId string, fields UpdateExpen
 	return &category, nil
 }
 
-func (bt *BudgetTracker) UpdateIncomeCategory(userId string, fields UpdateIncomeCategoryRequest) (*IncomeCategoryResponse, error) {
+func (bt *BudgetTracker) UpdateIncomeCategory(ctx context.Context, userId string, fields UpdateIncomeCategoryRequest) (*IncomeCategoryResponse, error) {
 	if fields.NewTargetAmount > MAX_TARGET_AMOUNT_LIMIT {
-		return nil, fmt.Errorf("%w: category max amount is too large; the limit is: %.2f", appErrors.ErrInvalidInput, MAX_CATEGORY_AMOUNT_LIMIT)
+		return nil, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category new target amount is too larger, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
+			IsFeedBack: false,
+		}
 	}
 	if len(fields.NewName) > MAX_CATEGORY_NAME_LENGTH {
-		return nil, fmt.Errorf("%w: category name is too long for category; the limit is: %d", appErrors.ErrInvalidInput, MAX_CATEGORY_NAME_LENGTH)
+		return nil, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category new name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
+			IsFeedBack: false,
+		}
 	}
 	if len(fields.NewNote) > MAX_TRANSACTION_NOTE_LENGTH {
-		return nil, fmt.Errorf("%w: note so long, maximum allowed length is: %d", appErrors.ErrInvalidInput, MAX_TRANSACTION_NOTE_LENGTH)
+		return nil, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInvalidInput,
+			Message:    fmt.Sprintf("Category new note so long, allowed maximum length is %d", MAX_TRANSACTION_NOTE_LENGTH),
+			IsFeedBack: false,
+		}
 	}
 
 	fields.UpdateTime = time.Now().UTC()
-	category, err := bt.storage.UpdateIncomeCategory(userId, fields)
+	category, err := bt.storage.UpdateIncomeCategory(ctx, userId, fields)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update income category: %w", err)
+		return nil, err
 	}
 
 	var usagePercent int
@@ -465,33 +603,32 @@ func (bt *BudgetTracker) UpdateIncomeCategory(userId string, fields UpdateIncome
 	return category, nil
 }
 
-func (bt *BudgetTracker) DeleteIncomeCategory(userId string, categoryId string) error {
-	err := bt.storage.DeleteIncomeCategory(userId, categoryId)
+func (bt *BudgetTracker) DeleteIncomeCategory(ctx context.Context, userId string, categoryId string) error {
+	err := bt.storage.DeleteIncomeCategory(ctx, userId, categoryId)
 	if err != nil {
-		return fmt.Errorf("%w:", err)
+		return err
 	}
 	return nil
 }
 
-func (bt *BudgetTracker) DeleteExpenseCategory(userId string, categoryId string) error {
-	err := bt.storage.DeleteExpenseCategory(userId, categoryId)
+func (bt *BudgetTracker) DeleteExpenseCategory(ctx context.Context, userId string, categoryId string) error {
+	err := bt.storage.DeleteExpenseCategory(ctx, userId, categoryId)
 	if err != nil {
-		return fmt.Errorf("%w:", err)
+		return err
 	}
 	return nil
 }
 
-func (bt *BudgetTracker) GetFilteredTransactions(userID string, filters *TransactionList) ([]Transaction, error) {
-	ts, err := bt.storage.GetFilteredTransactions(userID, filters)
+func (bt *BudgetTracker) GetFilteredTransactions(ctx context.Context, userID string, filters *TransactionList) ([]Transaction, error) {
+	ts, err := bt.storage.GetFilteredTransactions(ctx, userID, filters)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get transactions: %w", err)
+		return nil, err
 	}
 	var transactions []Transaction
 	for _, transaction := range ts {
 		t := Transaction{
 			ID:           transaction.ID,
 			CategoryName: transaction.CategoryName,
-			CategoryType: transaction.CategoryType,
 			Amount:       transaction.Amount,
 			Currency:     transaction.Currency,
 			CreatedAt:    transaction.CreatedAt,
@@ -503,18 +640,34 @@ func (bt *BudgetTracker) GetFilteredTransactions(userID string, filters *Transac
 	return transactions, nil
 }
 
-func (bt *BudgetTracker) GetTranscationById(userId string, transactionId string) (Transaction, error) {
-	t, err := bt.storage.GetTransactionById(userId, transactionId)
+func (bt *BudgetTracker) GetTranscationById(ctx context.Context, userId string, transactionId string) (Transaction, error) {
+	t, err := bt.storage.GetTransactionById(ctx, userId, transactionId)
 	if err != nil {
-		return Transaction{}, fmt.Errorf("failed to get transaction by id: %w", err)
+		return Transaction{}, err
 	}
 	return t, nil
 }
 
-func (bt *BudgetTracker) LogoutUser(userId string, token string) error {
-	err := bt.storage.LogoutUser(userId, token)
+func (bt *BudgetTracker) LogoutUser(ctx context.Context, userId string, token string) error {
+	err := bt.storage.LogoutUser(ctx, userId, token)
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (bt *BudgetTracker) DeleteUser(ctx context.Context, userId string, deleteReq auth.DeleteUser) error {
+	if deleteReq.Password == "" {
+		return appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Password cannot be empty!",
+		}
+	}
+
+	err := bt.storage.DeleteUser(ctx, userId, deleteReq)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

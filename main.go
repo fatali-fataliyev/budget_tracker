@@ -14,6 +14,9 @@ import (
 )
 
 var bt budget.BudgetTracker // Global
+type contextKey string
+
+var traceIDKey contextKey = "traceID"
 
 var corsConf = cors.New(cors.Options{
 	AllowedOrigins:   []string{"*"}, // change with actual address in production
@@ -49,16 +52,17 @@ func main() {
 	api := api.NewApi(&bt)
 
 	// USER ENDPOINT START.
-	server.HandleFunc("POST /register", iz.Bind(api.SaveUserHandler)) // Create User
-	server.HandleFunc("POST /login", iz.Bind(api.LoginUserHandler))   // Login User
-	server.HandleFunc("POST /logout", iz.Bind(api.LogoutUserHandler)) // Logout User
+	server.HandleFunc("POST /register", iz.Bind(api.SaveUserHandler))           // Create User
+	server.HandleFunc("POST /login", iz.Bind(api.LoginUserHandler))             // Login User
+	server.HandleFunc("GET /logout", iz.Bind(api.LogoutUserHandler))            // Logout User
+	server.HandleFunc("DELETE /remove-account", iz.Bind(api.DeleteUserHandler)) // Get User by token
 	// USER ENDPOINT END.
 
 	// TRANSACTION ENDPOINT START.
-	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))              // Create Transaction
-	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler))       // Get Transactions with filters
-	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler))       // Get transation by ID
-	server.Handle("POST /image-process", corsConf.Handler(iz.Bind(api.ProcessImageHandler))) // Take image from user, and returns possible transaction fields
+	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))        // Create Transaction
+	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler)) // Get Transactions with filters
+	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler)) // Get transation by ID
+	server.Handle("POST /image-process", iz.Bind(api.ProcessImageHandler))             // Take image from user, and returns possible transaction fields
 	server.Handle("OPTIONS /image-process", corsConf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})))

@@ -12,6 +12,7 @@ const (
 	MAX_LENGTH_FULLNAME = 255
 	MAX_LENGTH_USERNAME = 255
 	MAX_LENGTH_EMAIL    = 255
+	MAX_PASSWORD_LENGTH = 72
 )
 
 type User struct {
@@ -30,29 +31,61 @@ type NewUser struct {
 	Email         string
 }
 
+type DeleteUser struct {
+	Password string
+	Reason   string
+}
+
 func (newUser NewUser) ValidateUserFields() error {
 	usernameRegex := regexp.MustCompile(`^[a-z0-9_]{1,30}$`)
 	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9](\.?[a-zA-Z0-9_%+-])*@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$`)
 	if newUser.UserName == "" {
-		return fmt.Errorf("%w: username is empty", appErrors.ErrInvalidInput)
+		return appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Username cannot be empty!",
+		}
 	}
 	if !usernameRegex.MatchString(newUser.UserName) {
-		return fmt.Errorf("%w: this '%s' username is invalid, example valid username: john_doe", appErrors.ErrInvalidInput, newUser.UserName)
+		return appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Username contains wrong characters, example username: john_doe",
+		}
 	}
 	if len(newUser.FullName) > MAX_LENGTH_FULLNAME {
-		return fmt.Errorf("%w: fullname so long, maximum length: %d", appErrors.ErrInvalidInput, MAX_LENGTH_FULLNAME)
+		return appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Username so long, maximum length is %d", MAX_LENGTH_USERNAME),
+		}
 	}
 	if newUser.Email == "" {
-		return fmt.Errorf("%w: email is required", appErrors.ErrInvalidInput)
+		return appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Email cannot be empty!",
+		}
 	}
 	if !emailRegex.MatchString(newUser.Email) {
-		return fmt.Errorf("%w: invalid email format, example valid email: john.doe@gmail.com", appErrors.ErrInvalidInput)
+		return appErrors.ErrorResponse{
+			Code:    appErrors.ErrInternal,
+			Message: "Invalid email format, example valid email: john.doe@gmail.com",
+		}
 	}
 	if len(newUser.Email) > MAX_LENGTH_EMAIL {
-		return fmt.Errorf("%w: your email address so long, maximum length: %d", appErrors.ErrInvalidInput, MAX_LENGTH_EMAIL)
+		return appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Email so long, maximum length is %d", MAX_LENGTH_EMAIL),
+		}
 	}
 	if newUser.PasswordPlain == "" {
-		return fmt.Errorf("%w: password is required", appErrors.ErrInvalidInput)
+		return appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Password cannot be empty!",
+		}
+	}
+	if len(newUser.PasswordPlain) > MAX_PASSWORD_LENGTH {
+		return appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Password so long, maximum length is %d", MAX_PASSWORD_LENGTH),
+		}
 	}
 	return nil
 }

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -27,6 +26,11 @@ type SaveUserRequest struct {
 	FullName string `json:"fullname"`
 	Password string `json:"password"`
 	Email    string `json:"email"`
+}
+
+type DeleteUserRequest struct {
+	Password string `json:"password"`
+	Reason   string `json:"reason"`
 }
 
 type UserLoginRequest struct {
@@ -66,23 +70,19 @@ type UpdateIncomeCategoryRequest struct {
 
 //RESPONSES:
 
-type UserCreatedResponse struct {
+type OperationResponse struct {
+	Code    string `json:"code"`
 	Message string `json:"message"`
-	Token   string `json:"token"`
-}
-
-type LoginResponse struct {
-	Message string `json:"message"`
-	Token   string `json:"token"`
+	Extra   string `json:"extra"`
 }
 type TransactionItem struct {
 	ID           string  `json:"id"`
 	CategoryName string  `json:"category_name"`
+	CategoryType string  `json:"category_type"`
 	Amount       float64 `json:"amount"`
 	Currency     string  `json:"currency"`
 	CreatedAt    string  `json:"created_at"`
 	Note         string  `json:"note"`
-	Type         string  `json:"category_type"`
 	CreatedBy    string  `json:"created_by"`
 }
 type ListTransactionResponse struct {
@@ -135,17 +135,17 @@ type ProcessedImageResponseItem struct {
 	CurrenciesSymbol []string  `json:"currencies_symbol"`
 }
 
-func httpStatusFromError(err error) int {
-	switch {
-	case errors.Is(err, appErrors.ErrNotFound):
+func HttpStatusFromErrorCode(errorCode string) int {
+	switch errorCode {
+	case appErrors.ErrNotFound:
 		return 404 // not found
-	case errors.Is(err, appErrors.ErrInvalidInput):
+	case appErrors.ErrInvalidInput:
 		return 400 // bad request
-	case errors.Is(err, appErrors.ErrAuth):
+	case appErrors.ErrAuth:
 		return 401 // unauthorized
-	case errors.Is(err, appErrors.ErrAccessDenied):
+	case appErrors.ErrAccessDenied:
 		return 403 // access denied
-	case errors.Is(err, appErrors.ErrConflict):
+	case appErrors.ErrConflict:
 		return 409 // conflict
 	default:
 		return 500 //internal error
@@ -156,11 +156,11 @@ func TransactionToHttp(transcation budget.Transaction) TransactionItem {
 	return TransactionItem{
 		ID:           transcation.ID,
 		CategoryName: transcation.CategoryName,
+		CategoryType: transcation.CategoryType,
 		Amount:       transcation.Amount,
 		Currency:     transcation.Currency,
 		CreatedAt:    transcation.CreatedAt.Format(time.RFC3339),
 		Note:         transcation.Note,
-		Type:         transcation.CategoryType,
 		CreatedBy:    transcation.CreatedBy,
 	}
 }
@@ -223,7 +223,10 @@ func IncomeCategoryCheckParams(params url.Values) (*budget.IncomeCategoryList, e
 	if targetAmountStr != "" {
 		targetAmount, err := strconv.ParseFloat(targetAmountStr, 64)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid target_amount: %s", appErrors.ErrInvalidInput, targetAmountStr)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: fmt.Sprintf("Invalid target amount: %v", err.Error()),
+			}
 		}
 		filters.TargetAmount = targetAmount
 		hasAnyFilter = true
@@ -233,7 +236,10 @@ func IncomeCategoryCheckParams(params url.Values) (*budget.IncomeCategoryList, e
 	if createdAtStr != "" {
 		createdAt, err := time.Parse("02/01/2006", createdAtStr)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid created at date: %s", appErrors.ErrInvalidInput, createdAtStr)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: fmt.Sprintf("Invalid created date: %v", err.Error()),
+			}
 		}
 		filters.CreatedAt = createdAt.UTC()
 		hasAnyFilter = true
@@ -243,13 +249,19 @@ func IncomeCategoryCheckParams(params url.Values) (*budget.IncomeCategoryList, e
 	if endDateStr != "" {
 		endDate, err := time.Parse("02/01/2006", endDateStr)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid end date: %s", appErrors.ErrInvalidInput, endDateStr)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: fmt.Sprintf("Invalid end date: %v", err.Error()),
+			}
 		}
 		filters.EndDate = endDate.UTC()
 		hasAnyFilter = true
 
 		if !filters.CreatedAt.IsZero() && endDate.Before(filters.CreatedAt) {
-			return nil, fmt.Errorf("%w: end date cannot be before created at date", appErrors.ErrInvalidInput)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: "End date cannot be before created date",
+			}
 		}
 	}
 
@@ -277,7 +289,10 @@ func ExpenseCategoryCheckParams(params url.Values) (*budget.ExpenseCategoryList,
 	if maxAmountStr != "" {
 		maxAmount, err := strconv.ParseFloat(maxAmountStr, 64)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid max amount: %s", appErrors.ErrInvalidInput, maxAmountStr)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: fmt.Sprintf("Invalid maxiumum amount: %v", err.Error()),
+			}
 		}
 		filters.MaxAmount = maxAmount
 		hasAnyFilter = true
@@ -287,8 +302,12 @@ func ExpenseCategoryCheckParams(params url.Values) (*budget.ExpenseCategoryList,
 	if periodDayStr != "" {
 		periodDay, err := strconv.Atoi(periodDayStr)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid period day: %s", appErrors.ErrInvalidInput, periodDayStr)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: fmt.Sprintf("Invalid expire in day: %v", err.Error()),
+			}
 		}
+
 		filters.PeriodDay = periodDay
 		hasAnyFilter = true
 	}
@@ -297,8 +316,12 @@ func ExpenseCategoryCheckParams(params url.Values) (*budget.ExpenseCategoryList,
 	if createdAtStr != "" {
 		createdAt, err := time.Parse("02/01/2006", createdAtStr)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid created at date: %s", appErrors.ErrInvalidInput, createdAtStr)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: fmt.Sprintf("Invalid created date: %v", err.Error()),
+			}
 		}
+
 		filters.CreatedAt = createdAt.UTC()
 		hasAnyFilter = true
 	}
@@ -307,13 +330,20 @@ func ExpenseCategoryCheckParams(params url.Values) (*budget.ExpenseCategoryList,
 	if endDateStr != "" {
 		endDate, err := time.Parse("02/01/2006", endDateStr)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid end date: %s", appErrors.ErrInvalidInput, endDateStr)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: fmt.Sprintf("Invalid end date: %v", err.Error()),
+			}
 		}
+
 		filters.EndDate = endDate.UTC()
 		hasAnyFilter = true
 
 		if !filters.CreatedAt.IsZero() && endDate.Before(filters.CreatedAt) {
-			return nil, fmt.Errorf("%w: end date cannot be before created at date", appErrors.ErrInvalidInput)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: "End date cannot be before created date.",
+			}
 		}
 	}
 
@@ -342,8 +372,12 @@ func TransactionCheckParams(params url.Values) (*budget.TransactionList, error) 
 	if amount != "" {
 		maxAmount, err := strconv.ParseFloat(amount, 64)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid max amount: %s", appErrors.ErrInvalidInput, amount)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: fmt.Sprintf("Invalid maxiumum amount: %v", err.Error()),
+			}
 		}
+
 		filters.Amount = maxAmount
 		hasAnyFilter = true
 	}
@@ -358,8 +392,12 @@ func TransactionCheckParams(params url.Values) (*budget.TransactionList, error) 
 	if createdAtStr != "" {
 		createdAt, err := time.Parse("02/01/2006", createdAtStr)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid created at date: %s", appErrors.ErrInvalidInput, createdAtStr)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: fmt.Sprintf("Invalid created date: %v", err.Error()),
+			}
 		}
+
 		filters.CreatedAt = createdAt.UTC()
 		hasAnyFilter = true
 	}
@@ -367,7 +405,10 @@ func TransactionCheckParams(params url.Values) (*budget.TransactionList, error) 
 	categoryType := params.Get("category_type")
 	if categoryType != "" {
 		if categoryType != "income" && categoryType != "expense" {
-			return nil, fmt.Errorf("%w: invalid category type: %s", appErrors.ErrInvalidInput, categoryType)
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: "Invalid category type.",
+			}
 		} else {
 			if categoryType == "income" {
 				filters.Type = "+"
