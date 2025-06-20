@@ -161,7 +161,7 @@ func (inMem *InMemeoryStorage) DeleteTransaction(userId string, transacationID s
 func (inMem *InMemeoryStorage) FindUserByUserName(username string) (string, error) {
 	for _, user := range inMem.users {
 		if user.UserName == username {
-			about := fmt.Sprintf("fullname: %s, nickname: %s, username: %s", user.FullName, user.UserName)
+			about := fmt.Sprintf("fullname: %s, username: %s", user.FullName, user.UserName)
 			return about, nil
 		}
 	}

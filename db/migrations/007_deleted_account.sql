@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS `deleted_account`(
+    id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    reason varchar(300) DEFAULT "-",
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
