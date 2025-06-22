@@ -654,6 +654,9 @@ func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
 		PasswordPlain: loginRequest.Password,
 	}
 
+	logging.Logger.Infof("username: %s", loginRequest.UserName)
+	logging.Logger.Infof("password: %s", loginRequest.Password)
+
 	token, err := api.Service.GenerateSession(ctx, credentials)
 	if err != nil {
 		return RespondError(err)

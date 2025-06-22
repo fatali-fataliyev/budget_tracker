@@ -67,7 +67,7 @@ func Init() (*sql.DB, error) {
 		logging.Logger.Infof("Database [%s] already exists", dbname)
 	}
 
-	dbTimezoneSql := fmt.Sprintf("SET GLOBAL time_zone = '+00:00'")
+	dbTimezoneSql := "SET GLOBAL time_zone = '+00:00'"
 	_, err = rootDb.Exec(dbTimezoneSql)
 	if err != nil {
 		logging.Logger.Errorf("failed to set timezone: %v", err)
@@ -158,7 +158,7 @@ func getMigrationFiles(dir string) ([]string, error) {
 
 func getLastAppliedMigration(db *sql.DB, isFirstTime bool) (string, error) {
 	if isFirstTime {
-		migrationCreateSql := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `migration` (id int auto_increment primary key, migration_name varchar(255) not null unique, applied_at timestamp not null default current_timestamp);")
+		migrationCreateSql := "CREATE TABLE IF NOT EXISTS `migration` (id int auto_increment primary key, migration_name varchar(255) not null unique, applied_at timestamp not null default current_timestamp);"
 		_, err := db.Exec(migrationCreateSql)
 		if err != nil {
 			logging.Logger.Errorf("failed to create migration table for first time: %v", err)
@@ -265,7 +265,7 @@ func (mySql *MySQLStorage) SaveExpenseCategory(ctx context.Context, category bud
 			if mysqlErr.Number == 1062 {
 				return appErrors.ErrorResponse{
 					Code:       appErrors.ErrConflict,
-					Message:    fmt.Sprintf("The category already exists."),
+					Message:    "The category already exists.",
 					IsFeedBack: false,
 				}
 			}
@@ -291,7 +291,7 @@ func (mySql *MySQLStorage) SaveIncomeCategory(ctx context.Context, category budg
 			if mysqlErr.Number == 1062 {
 				return appErrors.ErrorResponse{
 					Code:       appErrors.ErrConflict,
-					Message:    fmt.Sprintf("The category already exists."),
+					Message:    "The category already exists.",
 					IsFeedBack: false,
 				}
 			}
@@ -448,7 +448,8 @@ func (mySql *MySQLStorage) CheckSession(ctx context.Context, token string) (stri
 }
 
 func (mySql *MySQLStorage) isCategoryExists(traceID string, categoryName string, categoryType string) (bool, string, error) {
-	if categoryType == "+" {
+	switch categoryType {
+	case "+":
 		incomeQuery := "SELECT name FROM income_category WHERE name = ?;"
 
 		var incomeCategoryName string
@@ -471,7 +472,7 @@ func (mySql *MySQLStorage) isCategoryExists(traceID string, categoryName string,
 		if incomeCategoryName != "" && incomeCategoryName == strings.ToLower(categoryName) {
 			return true, "+", nil
 		}
-	} else if categoryType == "-" {
+	case "-":
 		expenseQuery := "SELECT name FROM expense_category WHERE name = ?;"
 
 		var expenseCategoryName string
@@ -526,7 +527,7 @@ func (mySql *MySQLStorage) SaveTransaction(ctx context.Context, t budget.Transac
 		} else {
 			return appErrors.ErrorResponse{
 				Code:       appErrors.ErrInvalidInput,
-				Message:    fmt.Sprintf("Invalid category type for transaction"),
+				Message:    "Invalid category type for transaction",
 				IsFeedBack: false,
 			}
 		}
@@ -1281,7 +1282,7 @@ func (mySql *MySQLStorage) GetTransactionById(ctx context.Context, userID string
 		if errors.Is(err, sql.ErrNoRows) {
 			return budget.Transaction{}, appErrors.ErrorResponse{
 				Code:       appErrors.ErrInvalidInput,
-				Message:    fmt.Sprintf("The category does not exist."),
+				Message:    "The category does not exist.",
 				IsFeedBack: false,
 			}
 		}
@@ -1310,6 +1311,9 @@ func (mySql *MySQLStorage) GetTransactionById(ctx context.Context, userID string
 func (mySql *MySQLStorage) ValidateUser(ctx context.Context, credentials auth.UserCredentialsPure) (auth.User, error) {
 	traceID := contextutil.TraceIDFromContext(ctx)
 
+	logging.Logger.Infof("username-storage: %s", credentials.UserName)
+	logging.Logger.Infof("password-storage: %s", credentials.PasswordPlain)
+
 	query := "SELECT id, username, fullname, hashed_password, email FROM user WHERE username = ?;"
 	row := mySql.db.QueryRow(query, credentials.UserName)
 	var user auth.User
@@ -1318,7 +1322,7 @@ func (mySql *MySQLStorage) ValidateUser(ctx context.Context, credentials auth.Us
 		if errors.Is(err, sql.ErrNoRows) {
 			return auth.User{}, appErrors.ErrorResponse{
 				Code:       appErrors.ErrAuth,
-				Message:    fmt.Sprintf("The user does not exist, please sign up."),
+				Message:    "The user does not exist, please sign up.",
 				IsFeedBack: false,
 			}
 		}
@@ -1333,7 +1337,7 @@ func (mySql *MySQLStorage) ValidateUser(ctx context.Context, credentials auth.Us
 	if auth.ComparePasswords(user.PasswordHashed, credentials.PasswordPlain) != true {
 		return auth.User{}, appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("The password is wrong"),
+			Message:    "The password is wrong",
 			IsFeedBack: false,
 		}
 	}
@@ -1423,7 +1427,7 @@ func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, delete
 		if errors.Is(err, sql.ErrNoRows) {
 			return appErrors.ErrorResponse{
 				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("User does not exist."),
+				Message:    "User does not exist.",
 				IsFeedBack: false,
 			}
 		}
@@ -1441,7 +1445,7 @@ func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, delete
 		txn.Rollback()
 		return appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Password is wrong"),
+			Message:    "Password is wrong",
 			IsFeedBack: false,
 		}
 	}
