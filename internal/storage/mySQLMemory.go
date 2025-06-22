@@ -1046,11 +1046,12 @@ func (mySql *MySQLStorage) DeleteExpenseCategory(ctx context.Context, userId str
 func (mySql *MySQLStorage) getCategoryNameById(traceID string, userID string, categoryId string, categoryType string) (*string, error) {
 	var query string
 
-	if categoryType == "-" {
+	switch categoryType {
+	case "-":
 		query = "SELECT name FROM expense_categories WHERE created_by = ? AND id = ?;"
-	} else if categoryType == "+" {
+	case "+":
 		query = "SELECT name FROM income_categories WHERE created_by = ? AND id = ?;"
-	} else {
+	default:
 		return nil, appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
 			Message:    "Invalid category type.",
