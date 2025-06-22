@@ -1312,9 +1312,6 @@ func (mySql *MySQLStorage) GetTransactionById(ctx context.Context, userID string
 func (mySql *MySQLStorage) ValidateUser(ctx context.Context, credentials auth.UserCredentialsPure) (auth.User, error) {
 	traceID := contextutil.TraceIDFromContext(ctx)
 
-	logging.Logger.Infof("username-storage: %s", credentials.UserName)
-	logging.Logger.Infof("password-storage: %s", credentials.PasswordPlain)
-
 	query := "SELECT id, username, fullname, hashed_password, email FROM user WHERE username = ?;"
 	row := mySql.db.QueryRow(query, credentials.UserName)
 	var user auth.User
