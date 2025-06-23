@@ -777,6 +777,76 @@ func (mySql *MySQLStorage) processExpenseRows(ctx context.Context, rows *sql.Row
 	return categories, nil
 }
 
+func (mySql *MySQLStorage) GetExpenseCategoryStats(ctx context.Context, userId string) (budget.ExpenseStatsResponse, error) {
+	traceID := contextutil.TraceIDFromContext(ctx)
+
+	var statsRaw []dbExpenseStats
+
+	query := `
+	SELECT sub.amount_range,
+	       COUNT(*) AS count
+	FROM (
+	    SELECT 
+	    CASE 
+	        WHEN max_amount <= 500 THEN 'less_than_500'
+	        WHEN max_amount <= 1000 THEN 'between_501_1000'
+	        ELSE 'greater_than_1000'
+	    END AS amount_range
+	FROM expense_category
+	WHERE created_by = ?
+	) sub
+	GROUP BY sub.amount_range;
+	`
+
+	rows, err := mySql.db.Query(query, userId)
+	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get expense categories with max_amount <= 500 in Storage.GetExpenseCategoryStats() function | Error: %v", traceID, err)
+		return budget.ExpenseStatsResponse{}, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInternal,
+			Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
+			IsFeedBack: true,
+		}
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var stat dbExpenseStats
+		err := rows.Scan(&stat.AmountRange, &stat.Count)
+		if err != nil {
+			logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.GetExpenseCategoryStats() function | Error: %v", traceID, err)
+			return budget.ExpenseStatsResponse{}, appErrors.ErrorResponse{
+				Code:       appErrors.ErrInternal,
+				Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
+				IsFeedBack: true,
+			}
+		}
+		statsRaw = append(statsRaw, stat)
+	}
+	if err := rows.Err(); err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to iterate rows in Storage.GetExpenseCategoryStats() function | Error: %v", traceID, err)
+		return budget.ExpenseStatsResponse{}, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInternal,
+			Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
+			IsFeedBack: true,
+		}
+	}
+
+	var stats budget.ExpenseStatsResponse
+	for _, stat := range statsRaw {
+		switch strings.ToLower(stat.AmountRange) {
+		case "less_than_500":
+			stats.LessThan500 = stat.Count
+		case "between_501_1000":
+			stats.Between500And1000 = stat.Count
+		case "greater_than_1000":
+			stats.MoreThan1000 = stat.Count
+		}
+	}
+
+	return stats, nil
+}
+
 func (mySql *MySQLStorage) GetFilteredExpenseCategories(ctx context.Context, userID string, filters *budget.ExpenseCategoryList) ([]budget.ExpenseCategoryResponse, error) {
 	query := "SELECT id, name, max_amount, period_day, created_at, updated_at, note, created_by FROM expense_category WHERE created_by = ?"
 	args := []interface{}{userID}

@@ -80,6 +80,10 @@ func main() {
 	server.HandleFunc("PUT /category/income", iz.Bind(api.UpdateIncomeCategoryHandler))         // Update Income Category
 	server.HandleFunc("DELETE /category/income/{id}", iz.Bind(api.DeleteIncomeCategoryHandler)) // Delete Income Category
 
+	// STATISTICS ENDPOINT START.
+	server.HandleFunc("GET /statistics/expense", iz.Bind(api.GetExpenseCategoryStatsHandler)) // Get Statistics
+	// STATISTICS ENDPOINT END.
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		logging.Logger.Info("PORT environment variable not set, using default port 8060")

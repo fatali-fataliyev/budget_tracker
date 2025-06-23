@@ -312,6 +312,33 @@ func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	})
 }
 
+func (api *Api) GetExpenseCategoryStatsHandler(r *iz.Request) iz.Responder {
+	traceID := uuid.NewString()
+	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
+	logging.Logger.Infof("[TraceID=%s] | Starting Api.GetExpenseCategoryStatsHandler()", traceID)
+
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+			Code:    appErrors.ErrAuth,
+			Message: "Authorization header is required.",
+		})
+	}
+
+	userId, err := api.Service.CheckSession(ctx, token)
+	if err != nil {
+		return RespondError(err)
+	}
+
+	statsRaw, err := api.Service.GetExpenseCategoryStats(ctx, userId)
+	if err != nil {
+		return RespondError(err)
+	}
+	stats := ExpenseStatsToHttp(statsRaw)
+
+	return iz.Respond().Status(200).JSON(stats)
+}
+
 func (api *Api) GetFilteredIncomeCategoriesHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)

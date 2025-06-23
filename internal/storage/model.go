@@ -19,3 +19,8 @@ type dbSession struct {
 	ExpireAt  string
 	UserID    string
 }
+
+type dbExpenseStats struct {
+	AmountRange string
+	Count       int
+}

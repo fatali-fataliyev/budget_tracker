@@ -59,6 +59,7 @@ type Storage interface {
 	GetFilteredExpenseCategories(ctx context.Context, userID string, filters *ExpenseCategoryList) ([]ExpenseCategoryResponse, error)
 	GetFilteredIncomeCategories(ctx context.Context, userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error)
 	GetTransactionById(ctx context.Context, userID string, transacationID string) (Transaction, error)
+	GetExpenseCategoryStats(ctx context.Context, userId string) (ExpenseStatsResponse, error)
 	ValidateUser(ctx context.Context, credentials auth.UserCredentialsPure) (auth.User, error)
 	IsUserExists(ctx context.Context, username string) (bool, error)
 	IsEmailConfirmed(ctx context.Context, emailAddress string) (bool, error)
@@ -445,6 +446,15 @@ func (bt *BudgetTracker) SaveIncomeCategory(ctx context.Context, userId string, 
 		return err
 	}
 	return nil
+}
+
+func (bt *BudgetTracker) GetExpenseCategoryStats(ctx context.Context, userId string) (ExpenseStatsResponse, error) {
+	stats, err := bt.storage.GetExpenseCategoryStats(ctx, userId)
+	if err != nil {
+		return ExpenseStatsResponse{}, err
+	}
+
+	return stats, nil
 }
 
 func (bt *BudgetTracker) GetFilteredIncomeCategories(ctx context.Context, userID string, filters *IncomeCategoryList) ([]IncomeCategoryResponse, error) {
