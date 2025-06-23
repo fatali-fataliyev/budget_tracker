@@ -917,6 +917,36 @@ func (mySql *MySQLStorage) GetIncomeCategoryStats(ctx context.Context, userId st
 	return stats, nil
 }
 
+func (mySql *MySQLStorage) GetTransactionStats(ctx context.Context, userId string) (budget.TransactionStatsResponse, error) {
+	traceID := contextutil.TraceIDFromContext(ctx)
+
+	query := `
+	SELECT 
+		SUM(CASE WHEN category_type = '-' THEN 1 ELSE 0 END) AS expenses,
+		SUM(CASE WHEN category_type = '+' THEN 1 ELSE 0 END) AS incomes,
+		COUNT(*) AS total
+	FROM transaction
+	WHERE created_by = ?;
+	`
+
+	var stat dbTransactionStats
+	err := mySql.db.QueryRow(query, userId).Scan(&stat.Expenses, &stat.Incomes, &stat.Total)
+	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get transaction stats in Storage.GetTransactionStats() function | Error: %v", traceID, err)
+		return budget.TransactionStatsResponse{}, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInternal,
+			Message:    fmt.Sprintf("Please report this issue with ID: [%s]", traceID),
+			IsFeedBack: true,
+		}
+	}
+
+	return budget.TransactionStatsResponse{
+		Expenses: stat.Expenses,
+		Incomes:  stat.Incomes,
+		Total:    stat.Total,
+	}, nil
+}
+
 func (mySql *MySQLStorage) GetFilteredExpenseCategories(ctx context.Context, userID string, filters *budget.ExpenseCategoryList) ([]budget.ExpenseCategoryResponse, error) {
 	query := "SELECT id, name, max_amount, period_day, created_at, updated_at, note, created_by FROM expense_category WHERE created_by = ?"
 	args := []interface{}{userID}

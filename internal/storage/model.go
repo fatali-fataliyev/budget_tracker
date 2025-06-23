@@ -29,3 +29,9 @@ type dbIncomeStats struct {
 	AmountRange string
 	Count       int
 }
+
+type dbTransactionStats struct {
+	Expenses int
+	Incomes  int
+	Total    int
+}

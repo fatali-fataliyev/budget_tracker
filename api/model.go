@@ -115,6 +115,12 @@ type IncomeStatsResponse struct {
 	LessThan500       int `json:"less_than_500"`
 }
 
+type TransactionStatsResponse struct {
+	Expenses int `json:"expenses"`
+	Incomes  int `json:"incomes"`
+	Total    int `json:"total"`
+}
+
 type ListExpenseCategories struct {
 	Categories []ExpenseCategoryResponseItem `json:"categories"`
 }
@@ -178,6 +184,14 @@ func IncomeStatsToHttp(stats budget.IncomeStatsResponse) IncomeStatsResponse {
 		MoreThan1000:      stats.MoreThan1000,
 		Between500And1000: stats.Between500And1000,
 		LessThan500:       stats.LessThan500,
+	}
+}
+
+func TransactionStatsToHttp(stats budget.TransactionStatsResponse) TransactionStatsResponse {
+	return TransactionStatsResponse{
+		Expenses: stats.Expenses,
+		Incomes:  stats.Incomes,
+		Total:    stats.Total,
 	}
 }
 

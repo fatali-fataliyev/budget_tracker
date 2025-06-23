@@ -110,6 +110,12 @@ type IncomeStatsResponse struct {
 	LessThan500       int
 }
 
+type TransactionStatsResponse struct {
+	Expenses int
+	Incomes  int
+	Total    int
+}
+
 type IncomeCategoryResponse struct {
 	ID           string
 	Name         string
