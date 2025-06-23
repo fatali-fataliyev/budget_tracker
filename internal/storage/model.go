@@ -24,3 +24,8 @@ type dbExpenseStats struct {
 	AmountRange string
 	Count       int
 }
+
+type dbIncomeStats struct {
+	AmountRange string
+	Count       int
+}

@@ -109,6 +109,12 @@ type ExpenseStatsResponse struct {
 	LessThan500       int `json:"less_than_500"`
 }
 
+type IncomeStatsResponse struct {
+	MoreThan1000      int `json:"more_than_1000"`
+	Between500And1000 int `json:"between_500_and_1000"`
+	LessThan500       int `json:"less_than_500"`
+}
+
 type ListExpenseCategories struct {
 	Categories []ExpenseCategoryResponseItem `json:"categories"`
 }
@@ -161,6 +167,14 @@ func HttpStatusFromErrorCode(errorCode string) int {
 
 func ExpenseStatsToHttp(stats budget.ExpenseStatsResponse) ExpenseStatsResponse {
 	return ExpenseStatsResponse{
+		MoreThan1000:      stats.MoreThan1000,
+		Between500And1000: stats.Between500And1000,
+		LessThan500:       stats.LessThan500,
+	}
+}
+
+func IncomeStatsToHttp(stats budget.IncomeStatsResponse) IncomeStatsResponse {
+	return IncomeStatsResponse{
 		MoreThan1000:      stats.MoreThan1000,
 		Between500And1000: stats.Between500And1000,
 		LessThan500:       stats.LessThan500,

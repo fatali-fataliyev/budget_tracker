@@ -82,6 +82,7 @@ func main() {
 
 	// STATISTICS ENDPOINT START.
 	server.HandleFunc("GET /statistics/expense", iz.Bind(api.GetExpenseCategoryStatsHandler)) // Get Statistics
+	server.HandleFunc("GET /statistics/income", iz.Bind(api.GetIncomeCategoryStatsHandler))   // Get Statistics
 	// STATISTICS ENDPOINT END.
 
 	port := os.Getenv("PORT")
