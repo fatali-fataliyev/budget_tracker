@@ -19,3 +19,19 @@ type dbSession struct {
 	ExpireAt  string
 	UserID    string
 }
+
+type dbExpenseStats struct {
+	AmountRange string
+	Count       int
+}
+
+type dbIncomeStats struct {
+	AmountRange string
+	Count       int
+}
+
+type dbTransactionStats struct {
+	Expenses int
+	Incomes  int
+	Total    int
+}

@@ -7,10 +7,9 @@ import (
 const (
 	ErrNotFound     = "NOT FOUND"
 	ErrInvalidInput = "INVALID INPUT"
-	ErrAuth         = "UNAUTHOZIRED"
+	ErrAuth         = "UNAUTHORIZED"
 	ErrAccessDenied = "ACCESS DENIED"
 	ErrConflict     = "CONFLICT"
-	ErrFeedBack     = "FEEDBACK"
 	ErrInternal     = "INTERNAL"
 )
 

@@ -102,6 +102,25 @@ type ExpenseCategoryResponseItem struct {
 	Note         string  `json:"note"`
 	CreatedBy    string  `json:"created_by"`
 }
+
+type ExpenseStatsResponse struct {
+	MoreThan1000      int `json:"more_than_1000"`
+	Between500And1000 int `json:"between_500_and_1000"`
+	LessThan500       int `json:"less_than_500"`
+}
+
+type IncomeStatsResponse struct {
+	MoreThan1000      int `json:"more_than_1000"`
+	Between500And1000 int `json:"between_500_and_1000"`
+	LessThan500       int `json:"less_than_500"`
+}
+
+type TransactionStatsResponse struct {
+	Expenses int `json:"expenses"`
+	Incomes  int `json:"incomes"`
+	Total    int `json:"total"`
+}
+
 type ListExpenseCategories struct {
 	Categories []ExpenseCategoryResponseItem `json:"categories"`
 }
@@ -149,6 +168,30 @@ func HttpStatusFromErrorCode(errorCode string) int {
 		return 409 // conflict
 	default:
 		return 500 //internal error
+	}
+}
+
+func ExpenseStatsToHttp(stats budget.ExpenseStatsResponse) ExpenseStatsResponse {
+	return ExpenseStatsResponse{
+		MoreThan1000:      stats.MoreThan1000,
+		Between500And1000: stats.Between500And1000,
+		LessThan500:       stats.LessThan500,
+	}
+}
+
+func IncomeStatsToHttp(stats budget.IncomeStatsResponse) IncomeStatsResponse {
+	return IncomeStatsResponse{
+		MoreThan1000:      stats.MoreThan1000,
+		Between500And1000: stats.Between500And1000,
+		LessThan500:       stats.LessThan500,
+	}
+}
+
+func TransactionStatsToHttp(stats budget.TransactionStatsResponse) TransactionStatsResponse {
+	return TransactionStatsResponse{
+		Expenses: stats.Expenses,
+		Incomes:  stats.Incomes,
+		Total:    stats.Total,
 	}
 }
 

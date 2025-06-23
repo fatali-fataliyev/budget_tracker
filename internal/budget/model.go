@@ -98,6 +98,24 @@ type ExpenseCategoryResponse struct {
 	CreatedBy    string
 }
 
+type ExpenseStatsResponse struct {
+	MoreThan1000      int
+	Between500And1000 int
+	LessThan500       int
+}
+
+type IncomeStatsResponse struct {
+	MoreThan1000      int
+	Between500And1000 int
+	LessThan500       int
+}
+
+type TransactionStatsResponse struct {
+	Expenses int
+	Incomes  int
+	Total    int
+}
+
 type IncomeCategoryResponse struct {
 	ID           string
 	Name         string
