@@ -1218,9 +1218,9 @@ func (mySql *MySQLStorage) getCategoryNameById(traceID string, userID string, ca
 
 	switch categoryType {
 	case "-":
-		query = "SELECT name FROM expense_categories WHERE created_by = ? AND id = ?;"
+		query = "SELECT name FROM expense_category WHERE created_by = ? AND id = ?;"
 	case "+":
-		query = "SELECT name FROM income_categories WHERE created_by = ? AND id = ?;"
+		query = "SELECT name FROM income_category WHERE created_by = ? AND id = ?;"
 	default:
 		return nil, appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
