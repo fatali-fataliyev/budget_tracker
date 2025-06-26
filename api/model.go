@@ -277,7 +277,7 @@ func IncomeCategoryCheckParams(params url.Values) (*budget.IncomeCategoryList, e
 
 	createdAtStr := params.Get("created_at")
 	if createdAtStr != "" {
-		createdAt, err := time.Parse("02/01/2006", createdAtStr)
+		createdAt, err := time.Parse("2006-01-02", createdAtStr)
 		if err != nil {
 			return nil, appErrors.ErrorResponse{
 				Code:    appErrors.ErrInvalidInput,
@@ -290,7 +290,7 @@ func IncomeCategoryCheckParams(params url.Values) (*budget.IncomeCategoryList, e
 
 	endDateStr := params.Get("end_date")
 	if endDateStr != "" {
-		endDate, err := time.Parse("02/01/2006", endDateStr)
+		endDate, err := time.Parse("2006-01-02", endDateStr)
 		if err != nil {
 			return nil, appErrors.ErrorResponse{
 				Code:    appErrors.ErrInvalidInput,
@@ -357,35 +357,33 @@ func ExpenseCategoryCheckParams(params url.Values) (*budget.ExpenseCategoryList,
 
 	createdAtStr := params.Get("created_at")
 	if createdAtStr != "" {
-		createdAt, err := time.Parse("02/01/2006", createdAtStr)
+		createdAt, err := time.Parse("2006-01-02", createdAtStr)
 		if err != nil {
 			return nil, appErrors.ErrorResponse{
 				Code:    appErrors.ErrInvalidInput,
 				Message: fmt.Sprintf("Invalid created date: %v", err.Error()),
 			}
 		}
-
 		filters.CreatedAt = createdAt.UTC()
 		hasAnyFilter = true
 	}
 
 	endDateStr := params.Get("end_date")
 	if endDateStr != "" {
-		endDate, err := time.Parse("02/01/2006", endDateStr)
+		endDate, err := time.Parse("2006-01-02", endDateStr)
 		if err != nil {
 			return nil, appErrors.ErrorResponse{
 				Code:    appErrors.ErrInvalidInput,
 				Message: fmt.Sprintf("Invalid end date: %v", err.Error()),
 			}
 		}
-
 		filters.EndDate = endDate.UTC()
 		hasAnyFilter = true
 
 		if !filters.CreatedAt.IsZero() && endDate.Before(filters.CreatedAt) {
 			return nil, appErrors.ErrorResponse{
 				Code:    appErrors.ErrInvalidInput,
-				Message: "End date cannot be before created date.",
+				Message: "End date cannot be before created date",
 			}
 		}
 	}
