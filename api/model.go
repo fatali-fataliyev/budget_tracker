@@ -475,6 +475,11 @@ func TransactionCheckParams(params url.Values) (*budget.TransactionList, error) 
 			}
 		}
 
+	} else {
+		return nil, appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Category type parameter is required!",
+		}
 	}
 
 	filters.IsAllNil = !hasAnyFilter
