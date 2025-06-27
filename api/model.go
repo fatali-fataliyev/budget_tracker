@@ -260,6 +260,11 @@ func IncomeCategoryCheckParams(params url.Values) (*budget.IncomeCategoryList, e
 	if names != "" {
 		filters.Names = strings.Split(names, ",")
 		hasAnyFilter = true
+	} else {
+		return nil, appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Names parameter is required!",
+		}
 	}
 
 	targetAmountStr := params.Get("target_amount")

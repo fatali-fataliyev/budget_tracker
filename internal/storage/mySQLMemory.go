@@ -17,7 +17,6 @@ import (
 	"github.com/fatali-fataliyev/budget_tracker/internal/contextutil"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
 	"github.com/go-sql-driver/mysql"
-	"github.com/google/uuid"
 	"github.com/subosito/gotenv"
 )
 
@@ -648,14 +647,14 @@ func (mySql *MySQLStorage) processIncomeRows(ctx context.Context, rows *sql.Rows
 }
 
 func (mySql *MySQLStorage) GetFilteredIncomeCategories(ctx context.Context, userID string, filters *budget.IncomeCategoryList) ([]budget.IncomeCategoryResponse, error) {
-	query := "SELECT id, name, target_amount, created_at, updated_at, note, created_by FROM income_category WHERE created_by = ? ORDER BY created_at DESC"
+	query := "SELECT id, name, target_amount, created_at, updated_at, note, created_by FROM income_category WHERE created_by = ?"
 	args := []interface{}{userID}
 	traceID := contextutil.TraceIDFromContext(ctx)
 
-	// Without filters
+	// Without filters (all categories)
 
 	if filters.IsAllNil {
-		query += ";"
+		query += " ORDER BY created_at DESC;"
 		rows, err := mySql.db.Query(query, args...)
 
 		if err != nil {
@@ -674,7 +673,7 @@ func (mySql *MySQLStorage) GetFilteredIncomeCategories(ctx context.Context, user
 		return categories, nil
 	}
 
-	// With filters
+	// With filters (Filtered income categories)
 
 	if len(filters.Names) > 0 {
 		query += " AND name IN (?" + strings.Repeat(",?", len(filters.Names)-1) + ")"
@@ -697,6 +696,8 @@ func (mySql *MySQLStorage) GetFilteredIncomeCategories(ctx context.Context, user
 		query += " AND created_at <= ?"
 		args = append(args, filters.EndDate)
 	}
+
+	query += " ORDER BY created_at DESC;"
 
 	rows, err := mySql.db.Query(query, args...)
 	if err != nil {
@@ -948,18 +949,18 @@ func (mySql *MySQLStorage) GetTransactionStats(ctx context.Context, userId strin
 }
 
 func (mySql *MySQLStorage) GetFilteredExpenseCategories(ctx context.Context, userID string, filters *budget.ExpenseCategoryList) ([]budget.ExpenseCategoryResponse, error) {
-	query := "SELECT id, name, max_amount, period_day, created_at, updated_at, note, created_by FROM expense_category WHERE created_by = ? ORDER BY created_at DESC"
+	traceID := contextutil.TraceIDFromContext(ctx)
+	query := "SELECT id, name, max_amount, period_day, created_at, updated_at, note, created_by FROM expense_category WHERE created_by = ?"
 	args := []interface{}{userID}
 
 	if filters.IsAllNil {
-		query += ";"
+		query += " ORDER BY created_at DESC;"
 		rows, err := mySql.db.Query(query, args...)
 		if err != nil {
-			specialErrId := uuid.New().String()
-			logging.Logger.Errorf("special_id: %s | failed to get all expense categories in Storage.GetFilteredExpenseCategories() function | Error : %v", specialErrId, err)
+			logging.Logger.Errorf("[TraceID=%s] | failed to get all expense categories in Storage.GetFilteredExpenseCategories() function | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
 				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", specialErrId),
+				Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
 				IsFeedBack: true,
 			}
 		}
@@ -1000,13 +1001,13 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(ctx context.Context, use
 		args = append(args, filters.EndDate)
 	}
 
+	query += " ORDER BY created_at DESC;"
 	rows, err := mySql.db.Query(query, args...)
 	if err != nil {
-		specialErrId := uuid.New().String()
-		logging.Logger.Errorf("special_id: %s | failed to get filtered expense categories in Storage.GetFilteredExpenseCategories() function | Error : %v", specialErrId, err)
+		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered expense categories in Storage.GetFilteredExpenseCategories() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
 			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", specialErrId),
+			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
 			IsFeedBack: true,
 		}
 	}
@@ -1373,11 +1374,11 @@ func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql
 
 func (mySql *MySQLStorage) GetFilteredTransactions(ctx context.Context, userID string, filters *budget.TransactionList) ([]budget.Transaction, error) {
 	traceID := contextutil.TraceIDFromContext(ctx)
-	query := "SELECT id, category_name, amount, currency, created_at, note, created_by, category_type FROM transaction WHERE created_by = ? ORDER BY created_at DESC"
+	query := "SELECT id, category_name, amount, currency, created_at, note, created_by, category_type FROM transaction WHERE created_by = ?"
 	args := []interface{}{userID}
 
 	if filters.IsAllNil {
-		query += ";"
+		query += " ORDER BY created_at DESC;"
 		rows, err := mySql.db.Query(query, args...)
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to get all transactions from Storage.GetFilteredTransactions() function | Error : %v", traceID, err)
@@ -1423,6 +1424,7 @@ func (mySql *MySQLStorage) GetFilteredTransactions(ctx context.Context, userID s
 		args = append(args, filters.Type)
 	}
 
+	query += " ORDER BY created_at DESC;"
 	rows, err := mySql.db.Query(query, args...)
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered transactions from Storage.GetFilteredTransactions() function | Error : %v", traceID, err)
@@ -1468,7 +1470,7 @@ func (mySql *MySQLStorage) GetTransactionById(ctx context.Context, userID string
 
 	transaction.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 	if err != nil {
-		logging.Logger.Errorf("special_id: %s | failed to parse created_at field in Storage.GetTransactionById() function | Error : %v", traceID, err)
+		logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at field in Storage.GetTransactionById() function | Error : %v", traceID, err)
 		return budget.Transaction{}, appErrors.ErrorResponse{
 			Code:       appErrors.ErrInternal,
 			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
