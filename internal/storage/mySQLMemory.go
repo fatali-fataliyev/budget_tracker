@@ -648,7 +648,7 @@ func (mySql *MySQLStorage) processIncomeRows(ctx context.Context, rows *sql.Rows
 }
 
 func (mySql *MySQLStorage) GetFilteredIncomeCategories(ctx context.Context, userID string, filters *budget.IncomeCategoryList) ([]budget.IncomeCategoryResponse, error) {
-	query := "SELECT id, name, target_amount, created_at, updated_at, note, created_by FROM income_category WHERE created_by = ?"
+	query := "SELECT id, name, target_amount, created_at, updated_at, note, created_by FROM income_category WHERE created_by = ? ORDER BY created_at DESC"
 	args := []interface{}{userID}
 	traceID := contextutil.TraceIDFromContext(ctx)
 
@@ -948,7 +948,7 @@ func (mySql *MySQLStorage) GetTransactionStats(ctx context.Context, userId strin
 }
 
 func (mySql *MySQLStorage) GetFilteredExpenseCategories(ctx context.Context, userID string, filters *budget.ExpenseCategoryList) ([]budget.ExpenseCategoryResponse, error) {
-	query := "SELECT id, name, max_amount, period_day, created_at, updated_at, note, created_by FROM expense_category WHERE created_by = ?"
+	query := "SELECT id, name, max_amount, period_day, created_at, updated_at, note, created_by FROM expense_category WHERE created_by = ? ORDER BY created_at DESC"
 	args := []interface{}{userID}
 
 	if filters.IsAllNil {
@@ -1373,7 +1373,7 @@ func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql
 
 func (mySql *MySQLStorage) GetFilteredTransactions(ctx context.Context, userID string, filters *budget.TransactionList) ([]budget.Transaction, error) {
 	traceID := contextutil.TraceIDFromContext(ctx)
-	query := "SELECT id, category_name, amount, currency, created_at, note, created_by, category_type FROM transaction WHERE created_by = ?"
+	query := "SELECT id, category_name, amount, currency, created_at, note, created_by, category_type FROM transaction WHERE created_by = ? ORDER BY created_at DESC"
 	args := []interface{}{userID}
 
 	if filters.IsAllNil {
