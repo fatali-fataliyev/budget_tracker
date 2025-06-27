@@ -659,6 +659,7 @@ func (bt *BudgetTracker) GetFilteredTransactions(ctx context.Context, userID str
 		t := Transaction{
 			ID:           transaction.ID,
 			CategoryName: transaction.CategoryName,
+			CategoryType: transaction.CategoryType,
 			Amount:       transaction.Amount,
 			Currency:     transaction.Currency,
 			CreatedAt:    transaction.CreatedAt,
