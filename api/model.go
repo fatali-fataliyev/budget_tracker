@@ -331,6 +331,11 @@ func ExpenseCategoryCheckParams(params url.Values) (*budget.ExpenseCategoryList,
 	if names != "" {
 		filters.Names = strings.Split(names, ",")
 		hasAnyFilter = true
+	} else {
+		return nil, appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Names parameter is required!",
+		}
 	}
 
 	maxAmountStr := params.Get("max_amount")
@@ -412,6 +417,11 @@ func TransactionCheckParams(params url.Values) (*budget.TransactionList, error) 
 	if categoryNames != "" {
 		filters.CategoryNames = strings.Split(categoryNames, ",")
 		hasAnyFilter = true
+	} else {
+		return nil, appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Category names parameter is required!",
+		}
 	}
 
 	amount := params.Get("amount")
