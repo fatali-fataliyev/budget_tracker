@@ -159,3 +159,9 @@ type ProcessedImageResponse struct {
 	CurrenciesISO    []string
 	CurrenciesSymbol []string
 }
+
+type UserDataResponse struct {
+	Transactions      []Transaction
+	ExpenseCategories []ExpenseCategoryResponse
+	IncomeCategories  []IncomeCategoryResponse
+}

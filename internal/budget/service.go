@@ -71,6 +71,7 @@ type Storage interface {
 	UpdateIncomeCategory(ctx context.Context, userId string, fields UpdateIncomeCategoryRequest) (*IncomeCategoryResponse, error)
 	LogoutUser(ctx context.Context, userId string, token string) error
 	DeleteUser(ctx context.Context, userId string, deleteReq auth.DeleteUser) error
+	GetUserData(ctx context.Context, userId string) (UserDataResponse, error)
 	GetStorageType() string
 }
 
@@ -685,6 +686,14 @@ func (bt *BudgetTracker) LogoutUser(ctx context.Context, userId string, token st
 		return err
 	}
 	return nil
+}
+
+func (bt *BudgetTracker) DownloadUserData(ctx context.Context, userId string) (UserDataResponse, error) {
+	data, err := bt.storage.GetUserData(ctx, userId)
+	if err != nil {
+		return UserDataResponse{}, err
+	}
+	return data, nil
 }
 
 func (bt *BudgetTracker) DeleteUser(ctx context.Context, userId string, deleteReq auth.DeleteUser) error {

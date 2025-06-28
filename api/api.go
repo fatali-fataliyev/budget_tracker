@@ -1,6 +1,7 @@
 package api
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -777,6 +778,81 @@ func (api *Api) LogoutUserHandler(r *iz.Request) iz.Responder {
 	})
 }
 
+func (api *Api) DownloadUserData(w http.ResponseWriter, r *http.Request) {
+	traceID := uuid.NewString()
+	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
+	logging.Logger.Infof("[TraceID=%s] | Starting Api.DownloadUserData()", traceID)
+
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		http.Error(w, "Authorization header is required.", http.StatusUnauthorized)
+		return
+	}
+
+	userId, err := api.Service.CheckSession(ctx, token)
+	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | Session check failed: %v", traceID, err)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	data, err := api.Service.DownloadUserData(ctx, userId)
+	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | Failed to get user data: %v", traceID, err)
+		http.Error(w, "Failed to get user data", http.StatusInternalServerError)
+		return
+	}
+
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	writeJSON := func(filename string, payload interface{}) error {
+		file, err := zipWriter.Create(filename)
+		if err != nil {
+			logging.Logger.Errorf("[TraceID=%s] | Failed to create ZIP file %s: %v", traceID, filename, err)
+			return err
+		}
+		jsonBytes, err := json.MarshalIndent(payload, "", "  ")
+		if err != nil {
+			logging.Logger.Errorf("[TraceID=%s] | Failed to marshal JSON for %s: %v", traceID, filename, err)
+			return err
+		}
+		_, err = file.Write(jsonBytes)
+		if err != nil {
+			logging.Logger.Errorf("[TraceID=%s] | Failed to write JSON to ZIP for %s: %v", traceID, filename, err)
+		}
+		return err
+	}
+
+	if err := writeJSON("transactions.json", data.Transactions); err != nil {
+		http.Error(w, "Failed to write transactions", http.StatusInternalServerError)
+		return
+	}
+	if err := writeJSON("expense_categories.json", data.ExpenseCategories); err != nil {
+		http.Error(w, "Failed to write expense categories", http.StatusInternalServerError)
+		return
+	}
+	if err := writeJSON("income_categories.json", data.IncomeCategories); err != nil {
+		http.Error(w, "Failed to write income categories", http.StatusInternalServerError)
+		return
+	}
+
+	if err := zipWriter.Close(); err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | Failed to finalize ZIP: %v", traceID, err)
+		http.Error(w, "Failed to finalize ZIP file", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", `attachment; filename="user_data.zip"`)
+	w.WriteHeader(http.StatusOK)
+
+	_, err = w.Write(buf.Bytes())
+	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | Failed to write ZIP to response: %v", traceID, err)
+	}
+}
+
 func (api *Api) DeleteUserHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
@@ -828,6 +904,6 @@ func RespondError(err error) iz.Responder {
 		Code:       appErrors.ErrInternal,
 		Message:    "UNEXPECTED ERROR HAPPEND :(",
 		IsFeedBack: false,
-	}) // TODO imrpove
+	})
 
 }
