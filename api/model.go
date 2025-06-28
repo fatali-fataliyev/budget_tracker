@@ -446,7 +446,7 @@ func TransactionCheckParams(params url.Values) (*budget.TransactionList, error) 
 
 	createdAtStr := params.Get("created_at")
 	if createdAtStr != "" {
-		createdAt, err := time.Parse("02/01/2006", createdAtStr)
+		createdAt, err := time.Parse("2006-01-02", createdAtStr)
 		if err != nil {
 			return nil, appErrors.ErrorResponse{
 				Code:    appErrors.ErrInvalidInput,
