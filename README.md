@@ -268,6 +268,15 @@ paths:
                 Code: SUCCESS
                 Message: Account deleted successfully
 
+  /download-user-data:
+    post:
+      summary: Download user data as zip
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Zip file response.
+
   /transaction:
     post:
       summary: Create a transaction
