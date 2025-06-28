@@ -57,6 +57,7 @@ func main() {
 	server.HandleFunc("POST /login", iz.Bind(api.LoginUserHandler))           // Login User
 	server.HandleFunc("GET /logout", iz.Bind(api.LogoutUserHandler))          // Logout User
 	server.HandleFunc("POST /remove-account", iz.Bind(api.DeleteUserHandler)) // Get User by token
+	server.HandleFunc("GET /download-user-data", api.DownloadUserData)        // Get User by token
 	// USER ENDPOINT END.
 
 	// TRANSACTION ENDPOINT START.

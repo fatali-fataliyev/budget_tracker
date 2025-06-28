@@ -1576,6 +1576,46 @@ func (mySql *MySQLStorage) LogoutUser(ctx context.Context, userId string, token 
 	return nil
 }
 
+func (mySql *MySQLStorage) GetUserData(ctx context.Context, userId string) (budget.UserDataResponse, error) {
+	traceID := contextutil.TraceIDFromContext(ctx)
+
+	expenseCategories, err := mySql.GetFilteredExpenseCategories(ctx, userId, &budget.ExpenseCategoryList{IsAllNil: true})
+	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered expense categories in Storage.GetUserData() function | Error: %v", traceID, err)
+		return budget.UserDataResponse{}, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInternal,
+			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
+			IsFeedBack: true,
+		}
+	}
+	incomeCategories, err := mySql.GetFilteredIncomeCategories(ctx, userId, &budget.IncomeCategoryList{IsAllNil: true})
+	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered income categories in Storage.GetUserData() function | Error: %v", traceID, err)
+		return budget.UserDataResponse{}, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInternal,
+			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
+			IsFeedBack: true,
+		}
+	}
+	transactions, err := mySql.GetFilteredTransactions(ctx, userId, &budget.TransactionList{IsAllNil: true})
+	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered transactions in Storage.GetUserData() function | Error: %v", traceID, err)
+		return budget.UserDataResponse{}, appErrors.ErrorResponse{
+			Code:       appErrors.ErrInternal,
+			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
+			IsFeedBack: true,
+		}
+	}
+
+	userData := budget.UserDataResponse{
+		ExpenseCategories: expenseCategories,
+		IncomeCategories:  incomeCategories,
+		Transactions:      transactions,
+	}
+
+	return userData, nil
+}
+
 func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, deleteReq auth.DeleteUser) error {
 	traceID := contextutil.TraceIDFromContext(ctx)
 
