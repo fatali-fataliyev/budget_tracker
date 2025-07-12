@@ -853,6 +853,34 @@ func (api *Api) DownloadUserData(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (api *Api) CheckToken(r *iz.Request) iz.Responder {
+	traceID := uuid.NewString()
+	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
+
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+			Code:    appErrors.ErrAuth,
+			Message: "Authorization header is required.",
+		})
+	}
+	logging.Logger.Infof("[TraceID=%s] | Checking Token, [Token: '%s']", traceID, token)
+
+	validToken, err := api.Service.CheckSession(ctx, token)
+	if err != nil {
+		return RespondError(err)
+	}
+
+	if validToken == "" {
+		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+			Code:    appErrors.ErrAuth,
+			Message: "Authorization failed.",
+		})
+	}
+
+	return iz.Respond().Status(200).Text(validToken)
+}
+
 func (api *Api) DeleteUserHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
