@@ -923,9 +923,9 @@ func (mySql *MySQLStorage) GetTransactionStats(ctx context.Context, userId strin
 
 	query := `
 	SELECT 
-		SUM(CASE WHEN category_type = '-' THEN 1 ELSE 0 END) AS expenses,
-		SUM(CASE WHEN category_type = '+' THEN 1 ELSE 0 END) AS incomes,
-		COUNT(*) AS total
+  		SUM(CASE WHEN category_type = '-' THEN amount ELSE 0 END) AS total_expenses,
+  		SUM(CASE WHEN category_type = '+' THEN amount ELSE 0 END) AS total_incomes,
+  		SUM(amount) AS total
 	FROM transaction
 	WHERE created_by = ?;
 	`
