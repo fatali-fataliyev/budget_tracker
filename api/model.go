@@ -116,9 +116,9 @@ type IncomeStatsResponse struct {
 }
 
 type TransactionStatsResponse struct {
-	Expenses int `json:"expenses"`
-	Incomes  int `json:"incomes"`
-	Total    int `json:"total"`
+	Expenses float64 `json:"expenses"`
+	Incomes  float64 `json:"incomes"`
+	Total    float64 `json:"total"`
 }
 
 type ListExpenseCategories struct {

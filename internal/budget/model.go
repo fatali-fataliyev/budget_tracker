@@ -111,9 +111,9 @@ type IncomeStatsResponse struct {
 }
 
 type TransactionStatsResponse struct {
-	Expenses int
-	Incomes  int
-	Total    int
+	Expenses float64
+	Incomes  float64
+	Total    float64
 }
 
 type IncomeCategoryResponse struct {

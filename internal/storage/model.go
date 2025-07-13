@@ -31,7 +31,7 @@ type dbIncomeStats struct {
 }
 
 type dbTransactionStats struct {
-	Expenses int
-	Incomes  int
-	Total    int
+	Expenses float64
+	Incomes  float64
+	Total    float64
 }
