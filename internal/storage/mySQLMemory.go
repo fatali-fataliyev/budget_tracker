@@ -1492,7 +1492,7 @@ func (mySql *MySQLStorage) ValidateUser(ctx context.Context, credentials auth.Us
 		if errors.Is(err, sql.ErrNoRows) {
 			return auth.User{}, appErrors.ErrorResponse{
 				Code:       appErrors.ErrAuth,
-				Message:    "The user does not exist, please sign up.",
+				Message:    "Username or Password is incorrect",
 				IsFeedBack: false,
 			}
 		}
@@ -1507,7 +1507,7 @@ func (mySql *MySQLStorage) ValidateUser(ctx context.Context, credentials auth.Us
 	if auth.ComparePasswords(user.PasswordHashed, credentials.PasswordPlain) != true {
 		return auth.User{}, appErrors.ErrorResponse{
 			Code:       appErrors.ErrInvalidInput,
-			Message:    "The password is wrong",
+			Message:    "Username or Password is incorrect",
 			IsFeedBack: false,
 		}
 	}
