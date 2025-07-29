@@ -892,15 +892,14 @@ func (mySql *MySQLStorage) GetIncomeCategoryStats(ctx context.Context, userId st
 
 	return stats, nil
 }
-
 func (mySql *MySQLStorage) GetTransactionStats(ctx context.Context, userId string) (budget.TransactionStatsResponse, error) {
 	traceID := contextutil.TraceIDFromContext(ctx)
 
 	query := `
 	SELECT 
-  		SUM(CASE WHEN category_type = '-' THEN amount ELSE 0 END) AS expenses,
-  		SUM(CASE WHEN category_type = '+' THEN amount ELSE 0 END) AS incomes,
-  		SUM(amount) AS total
+		IFNULL(SUM(CASE WHEN category_type = '-' THEN amount ELSE 0 END), 0) AS expenses,
+		IFNULL(SUM(CASE WHEN category_type = '+' THEN amount ELSE 0 END), 0) AS incomes,
+		IFNULL(SUM(amount), 0) AS total
 	FROM transaction
 	WHERE created_by = ?;
 	`
