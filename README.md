@@ -17,7 +17,7 @@ A RESTful API built with Go 🦫 for managing personal budgets, expenses, and in
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/yourusername/budget-tracker.git
+   git clone https://github.com/fatali-fataliyev/budget_tracker
    cd budget-tracker
    ```
 
