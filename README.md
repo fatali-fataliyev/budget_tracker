@@ -1,6 +1,6 @@
 # Budget Tracker App 💰
 
-A RESTful API built with Go 🦫 for managing personal budgets, expenses, and income categories.
+A RESTful API built with Go 🦫 for managing personal budgets, expenses, and income categories, extract data from receipt.
 
 ---
 
@@ -8,8 +8,7 @@ A RESTful API built with Go 🦫 for managing personal budgets, expenses, and in
 
 - Go 1.20 or later
 - MySQL database
-- Internet connection
-- A server (for production)
+- Internet connection(for OCR_API)
 
 ---
 
@@ -26,7 +25,7 @@ A RESTful API built with Go 🦫 for managing personal budgets, expenses, and in
    ```bash
    cp env_sample .env
    ```
-   Then open the **.env** file and fill in the required values such as your dbuser, dbpassword, dbname etc.
+   Then open the **.env** file and fill in the required values such as your _db user_, _db host_, _db password_, _dbname_ etc.
 3. **Run the application**
    ```bash
    go run main.go
