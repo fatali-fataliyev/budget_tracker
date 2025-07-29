@@ -155,13 +155,19 @@ type TransactionList struct {
 }
 
 type ProcessedImageResponse struct {
-	Amounts          []float64
-	CurrenciesISO    []string
-	CurrenciesSymbol []string
+	Amounts       []float64
+	CurrenciesISO []string
 }
 
 type UserDataResponse struct {
 	Transactions      []Transaction
 	ExpenseCategories []ExpenseCategoryResponse
 	IncomeCategories  []IncomeCategoryResponse
+}
+
+type AccountInfo struct {
+	Username string
+	Fullname string
+	Email    string
+	JoinedAt string
 }

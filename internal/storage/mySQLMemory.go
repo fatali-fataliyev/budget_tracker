@@ -11,37 +11,53 @@ import (
 	"strings"
 	"time"
 
-	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
+	appErrors "github.com/fatali-fataliyev/budget_tracker/customErrors"
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 	"github.com/fatali-fataliyev/budget_tracker/internal/contextutil"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
 	"github.com/go-sql-driver/mysql"
-	"github.com/subosito/gotenv"
 )
 
 // --- INIT START --- //
 
 func Init() (*sql.DB, error) {
-	err := gotenv.Load()
-	if err != nil {
-		logging.Logger.Warn("failed to load '.env' file variables, exptecting they are set in environment...")
+	username := os.Getenv("DB_USER")
+	if username == "" {
+		return nil, fmt.Errorf("Missing required environment variable: DB_USER")
 	}
 
-	username := os.Getenv("DBUSER")
-	password := os.Getenv("DBPASS")
-	dbname := os.Getenv("DBNAME")
+	password := os.Getenv("DB_PASS")
+	if password == "" {
+		return nil, fmt.Errorf("Missing required environment variable: DB_PASS")
+	}
 
-	logging.Logger.Info("connecting to root MySQL...")
+	host := os.Getenv("DB_HOST")
+	if host == "" {
+		return nil, fmt.Errorf("Missing required environment variable: DB_HOST")
+	}
 
-	dsnWithoutDb := fmt.Sprintf("%s:%s@tcp(localhost:3306)/", username, password)
-	rootDb, err := sql.Open("mysql", dsnWithoutDb)
+	port := os.Getenv("DB_PORT")
+	if port == "" {
+		return nil, fmt.Errorf("Missing required environment variable: DB_PORT")
+	}
+	dbname := os.Getenv("DB_NAME")
+
+	logging.Logger.Warn("connecting to MySQL...")
+
+	rootDbDsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/", username, password, host, port)
+	rootDb, err := sql.Open("mysql", rootDbDsn)
 	if err != nil {
-		logging.Logger.Errorf("failed to connect root mysql: %v", err)
-		return nil, fmt.Errorf("failed to connect root mysql")
+		return nil, fmt.Errorf("failed to connect root mysql: %v", err)
 	}
 	defer rootDb.Close()
+
 	logging.Logger.Info("connected to root MySQL")
+
+	if dbname == "" {
+		logging.Logger.Warnf("DB_NAME env value is not set, default database name is 'budget_tracker' ")
+		dbname = "budget_tracker"
+	}
 
 	var isFirstTime bool
 
@@ -54,88 +70,85 @@ func Init() (*sql.DB, error) {
 		createDbSql := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;", dbname)
 		_, err = rootDb.Exec(createDbSql)
 		if err != nil {
-			logging.Logger.Errorf("failed to create database: %v", err)
-			return nil, fmt.Errorf("failed to create database")
+			return nil, fmt.Errorf("failed to create database: %v", err)
 		}
-
 		isFirstTime = true
 	} else if err != nil {
-		logging.Logger.Errorf("failed to check database existence: %v", err)
-		return nil, fmt.Errorf("failed to check database existence")
+		return nil, fmt.Errorf("failed to check database existence: %v", err)
 	} else {
-		logging.Logger.Infof("Database [%s] already exists", dbname)
+		logging.Logger.Infof("database [%s] is already exists", dbname)
 	}
 
 	dbTimezoneSql := "SET GLOBAL time_zone = '+00:00'"
 	_, err = rootDb.Exec(dbTimezoneSql)
 	if err != nil {
-		logging.Logger.Errorf("failed to set timezone: %v", err)
-		return nil, fmt.Errorf("failed to set timezone")
+		return nil, fmt.Errorf("failed to set MySQL timezone(0-UTC): %v", err)
 	}
 
 	logging.Logger.Info("connecting to database")
-	dsnWithDb := fmt.Sprintf("%s:%s@tcp(localhost:3306)/%s?multiStatements=true", username, password, dbname)
+	dsnWithDb := fmt.Sprintf("%s%s?multiStatements=true", rootDbDsn, dbname)
 	db, err := sql.Open("mysql", dsnWithDb)
 	if err != nil {
-		logging.Logger.Errorf("failed to open database: %v", err)
-		return nil, fmt.Errorf("failed to open database")
+		return nil, fmt.Errorf("failed to open database: %v", err)
 	}
-	logging.Logger.Info("connected to database")
-	logging.Logger.Info("ping database...")
 
-	var pingCounter = 0
+	pingCounter := 0
 	for i := 0; i < 10; i++ {
 		pingCounter++
 		if err := db.Ping(); err == nil {
 			break
 		}
-		logging.Logger.Warnf("waiting for database...")
+		logging.Logger.Warnf("ping database...")
 		time.Sleep(3 * time.Second)
 	}
 	if pingCounter == 10 {
-		logging.Logger.Errorf("failed to ping database after 10 attempts: %v", err)
-		return nil, fmt.Errorf("failed to ping database")
+		return nil, fmt.Errorf("failed to ping database after 10 attempts: %v", err)
 	}
 
-	logging.Logger.Info("ping response is positive")
+	logging.Logger.Info("connected to database")
 	logging.Logger.Info("running migrations")
 
+	err = runMigrations(db, isFirstTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %v", err)
+	}
+
+	return db, nil
+}
+
+func runMigrations(db *sql.DB, isFirstTime bool) error {
 	migrationFiles, err := getMigrationFiles("db/migrations")
 	if err != nil {
-		logging.Logger.Errorf("failed to get migration files: %v", err)
-		return nil, fmt.Errorf("failed to run migrations")
+		return fmt.Errorf("failed to get migration files: %v", err)
 	}
 
 	lastAppliedMigration, err := getLastAppliedMigration(db, isFirstTime)
 	if err != nil {
-		logging.Logger.Errorf("failed to get last applied migration name: %v", err)
-		return nil, nil
+		return fmt.Errorf("failed to get last applied migration name: %v", err)
 	}
 
 	newMigrations := filterNewMigrations(migrationFiles, lastAppliedMigration)
 
 	if len(newMigrations) == 0 {
 		logging.Logger.Info("no new migration")
-		return db, nil
+		return nil
 	}
 
 	for _, migrationFile := range newMigrations {
 		logging.Logger.Info("applying migration: ", migrationFile)
 		migrationContent, err := os.ReadFile(filepath.Join("db/migrations/", migrationFile))
 		if err != nil {
-			logging.Logger.Errorf("failed to read this '%s' migration file, error: %v", migrationFile, err)
-			return nil, fmt.Errorf("failed to run migrations")
+			return fmt.Errorf("failed to read this '%s' migration file, error: %v", migrationFile, err)
 		}
 
 		err = applyMigration(db, migrationFile, string(migrationContent))
 		if err != nil {
-			logging.Logger.Errorf("failed to apply this '%s' migration file, error: ", err)
-			return nil, fmt.Errorf("failed to run migrations")
+			return fmt.Errorf("failed to apply this '%s' migration file, error: ", err)
 		}
 
 	}
 	logging.Logger.Info("all migrations applied successfully")
-	return db, nil
+	return nil
 }
 
 func getMigrationFiles(dir string) ([]string, error) {
@@ -157,11 +170,13 @@ func getMigrationFiles(dir string) ([]string, error) {
 
 func getLastAppliedMigration(db *sql.DB, isFirstTime bool) (string, error) {
 	if isFirstTime {
-		migrationCreateSql := "CREATE TABLE IF NOT EXISTS `migration` (id int auto_increment primary key, migration_name varchar(255) not null unique, applied_at timestamp not null default current_timestamp);"
-		_, err := db.Exec(migrationCreateSql)
+		migrationCreateSql, err := os.ReadFile(filepath.Join("db/migrations/", "001_migration.sql"))
 		if err != nil {
-			logging.Logger.Errorf("failed to create migration table for first time: %v", err)
-			return "", fmt.Errorf("failed to create database")
+			return "", fmt.Errorf("failed to read migration table creation file: %v", err)
+		}
+		_, err = db.Exec(string(migrationCreateSql))
+		if err != nil {
+			return "", fmt.Errorf("failed to create migration table for first time: %v", err)
 		}
 		return "001_migration.sql", nil
 	}
@@ -229,9 +244,8 @@ func (mySql *MySQLStorage) SaveUser(ctx context.Context, user auth.User) error {
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to save user Storage.SaveUser(), Error: %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Registration failed, try again later.",
 		}
 	}
 	return nil
@@ -247,9 +261,8 @@ func (mySql *MySQLStorage) SaveSession(ctx context.Context, session auth.Session
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to save session in Storage.SaveSession() function | Error: %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to check session, try again later.",
 		}
 	}
 	return nil
@@ -263,18 +276,16 @@ func (mySql *MySQLStorage) SaveExpenseCategory(ctx context.Context, category bud
 		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
 			if mysqlErr.Number == 1062 {
 				return appErrors.ErrorResponse{
-					Code:       appErrors.ErrConflict,
-					Message:    "The category already exists.",
-					IsFeedBack: false,
+					Code:    appErrors.ErrConflict,
+					Message: "The category already exists.",
 				}
 			}
 		}
 
 		logging.Logger.Errorf("[TraceID=%s] | failed to save expense category in Storage.SaveExpenseCategory() function | Error: %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to save the category, try again later.",
 		}
 	}
 	return nil
@@ -289,17 +300,15 @@ func (mySql *MySQLStorage) SaveIncomeCategory(ctx context.Context, category budg
 		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
 			if mysqlErr.Number == 1062 {
 				return appErrors.ErrorResponse{
-					Code:       appErrors.ErrConflict,
-					Message:    "The category already exists.",
-					IsFeedBack: false,
+					Code:    appErrors.ErrConflict,
+					Message: "The category already exists.",
 				}
 			}
 		}
 		logging.Logger.Errorf("[TraceID=%s] | failed to save expense category in Storage.SaveExpenseCategory() function | Error: %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to save the category, try again later.",
 		}
 	}
 	return nil
@@ -314,9 +323,8 @@ func (mySql *MySQLStorage) UpdateSession(ctx context.Context, userId string, new
 		logging.Logger.Errorf("[TraceID=%s] | failed to update session in Storage.UpdateSession() function | Error: %v", traceID, err)
 
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to check session, please try again later.",
 		}
 	}
 
@@ -324,17 +332,15 @@ func (mySql *MySQLStorage) UpdateSession(ctx context.Context, userId string, new
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to check affected rows in Storage.UpdateSession() function | Error: %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to check session, please try again later.",
 		}
 	}
 
 	if rowsAffected == 0 {
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrAuth,
-			Message:    "Session does not exist, please login.",
-			IsFeedBack: false,
+			Code:    appErrors.ErrAuth,
+			Message: "Session does not exist, please login.",
 		}
 	}
 
@@ -356,17 +362,15 @@ func (mySql *MySQLStorage) GetSessionByToken(ctx context.Context, token string) 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return auth.Session{}, appErrors.ErrorResponse{
-				Code:       appErrors.ErrAuth,
-				Message:    "Session does not exist, please login.",
-				IsFeedBack: false,
+				Code:    appErrors.ErrAuth,
+				Message: "Session does not exist, please login.",
 			}
 		}
 
 		logging.Logger.Errorf("[TraceID=%s] | failed to get session by token in Storage.GetSessionByToken() function | Error: %v", traceID, err)
 		return auth.Session{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to check session, please try again later.",
 		}
 	}
 
@@ -374,18 +378,16 @@ func (mySql *MySQLStorage) GetSessionByToken(ctx context.Context, token string) 
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at row in Storage.GetSessionByToken() function | Error: %v", traceID, err)
 		return auth.Session{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to check session, please try again later.",
 		}
 	}
 	expireAt, err := time.Parse("2006-01-02 15:04:05", dbSession.ExpireAt)
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to parse updated_at row in Storage.GetSessionByToken() function | Error: %v", traceID, err)
 		return auth.Session{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to check session, please try again later.",
 		}
 	}
 
@@ -411,16 +413,14 @@ func (mySql *MySQLStorage) CheckSession(ctx context.Context, token string) (stri
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", appErrors.ErrorResponse{
-				Code:       appErrors.ErrAuth,
-				Message:    "Session does not exist, please login.",
-				IsFeedBack: false,
+				Code:    appErrors.ErrAuth,
+				Message: "Session does not exist, please login.",
 			}
 		}
 		logging.Logger.Errorf("[TraceID=%s] | failed to check session existance in Storage.CheckSession() function | Error: %v", traceID, err)
 		return "", appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to check session, please try again later.",
 		}
 	}
 
@@ -428,18 +428,16 @@ func (mySql *MySQLStorage) CheckSession(ctx context.Context, token string) (stri
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at row in Storage.CheckSession() function | Error: %v", traceID, err)
 		return "", appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to check session, please try again later.",
 		}
 	}
 
 	now := time.Now().UTC()
 	if expireAt.Before(now) {
 		return "", appErrors.ErrorResponse{
-			Code:       appErrors.ErrAuth,
-			Message:    "Your session expired, please login again.",
-			IsFeedBack: false,
+			Code:    appErrors.ErrAuth,
+			Message: "Your session expired, please login again.",
 		}
 	}
 
@@ -461,9 +459,8 @@ func (mySql *MySQLStorage) isCategoryExists(traceID string, categoryName string,
 
 			logging.Logger.Errorf("[TraceID=%s] | failed to check income category existence in Storage.isCategoryExist() function | Error: %v", traceID, err)
 			return false, "", appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to check category existance",
 			}
 		}
 
@@ -484,9 +481,8 @@ func (mySql *MySQLStorage) isCategoryExists(traceID string, categoryName string,
 
 			logging.Logger.Errorf("[TraceID=%s] | failed to check expense category existence in Storage.isCategoryExist() function | Error: %v", traceID, err)
 			return false, "", appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to check category existance",
 			}
 		}
 
@@ -496,9 +492,8 @@ func (mySql *MySQLStorage) isCategoryExists(traceID string, categoryName string,
 		}
 	}
 	return false, "", appErrors.ErrorResponse{
-		Code:       appErrors.ErrInvalidInput,
-		Message:    "Invalid category type",
-		IsFeedBack: false,
+		Code:    appErrors.ErrInvalidInput,
+		Message: "Invalid category type",
 	}
 }
 
@@ -516,25 +511,22 @@ func (mySql *MySQLStorage) SaveTransaction(ctx context.Context, t budget.Transac
 			if err != nil {
 				logging.Logger.Errorf("[TraceID=%s] | failed to save transaction in Storage.SaveTransaction() function, | Error: %v", traceID, err)
 				return appErrors.ErrorResponse{
-					Code:       appErrors.ErrInternal,
-					Message:    fmt.Sprintf("Please report this issue using the following ID: [%s]", traceID),
-					IsFeedBack: true,
+					Code:    appErrors.ErrInternal,
+					Message: "Failed to save transaction, try again later.",
 				}
 			}
 
 			return nil
 		} else {
 			return appErrors.ErrorResponse{
-				Code:       appErrors.ErrInvalidInput,
-				Message:    "Invalid category type for transaction",
-				IsFeedBack: false,
+				Code:    appErrors.ErrInvalidInput,
+				Message: "Invalid category type for transaction",
 			}
 		}
 	}
 	return appErrors.ErrorResponse{
-		Code:       appErrors.ErrInvalidInput,
-		Message:    "The category does not exist, please create the category",
-		IsFeedBack: false,
+		Code:    appErrors.ErrInvalidInput,
+		Message: "The category does not exist, please create the category",
 	}
 }
 
@@ -575,9 +567,8 @@ func (mySql *MySQLStorage) GetTotalAmountOfTransactions(ctx context.Context, use
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to get total amount of '%s' categories in Storage.GetTotalAmountOfTransactions() function | Error: %v", traceID, categoryType, err)
 		return 0, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get total amount of transactions, try again later",
 		}
 	}
 
@@ -599,9 +590,8 @@ func (mySql *MySQLStorage) processIncomeRows(ctx context.Context, rows *sql.Rows
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.processIncomeRows() function | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to get categories, try again later.",
 			}
 		}
 
@@ -609,9 +599,8 @@ func (mySql *MySQLStorage) processIncomeRows(ctx context.Context, rows *sql.Rows
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at in Storage.processIncomeRows() function | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to get categories, try again later.",
 			}
 		}
 
@@ -619,9 +608,8 @@ func (mySql *MySQLStorage) processIncomeRows(ctx context.Context, rows *sql.Rows
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to parse updated_at in Storage.processIncomeRows() function | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to get categories, try again later.",
 			}
 		}
 
@@ -637,9 +625,8 @@ func (mySql *MySQLStorage) processIncomeRows(ctx context.Context, rows *sql.Rows
 	if err := rows.Err(); err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to iterate rows in Storage.processIncomeRows() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get categories, try again later.",
 		}
 	}
 
@@ -660,9 +647,8 @@ func (mySql *MySQLStorage) GetFilteredIncomeCategories(ctx context.Context, user
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to get all income categories in Storage.GetFilteredIncomeCategories() function | Error: %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to get cateogories.",
 			}
 		}
 		categories, err := mySql.processIncomeRows(ctx, rows, userID)
@@ -703,9 +689,8 @@ func (mySql *MySQLStorage) GetFilteredIncomeCategories(ctx context.Context, user
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered categories in Storage.GetFilteredIncomeCategories() function | Error: %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get categories.",
 		}
 	}
 	categories, err := mySql.processIncomeRows(ctx, rows, userID)
@@ -731,9 +716,8 @@ func (mySql *MySQLStorage) processExpenseRows(ctx context.Context, rows *sql.Row
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.processExpenseRows() function | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to get categories, try again later.",
 			}
 		}
 
@@ -741,9 +725,8 @@ func (mySql *MySQLStorage) processExpenseRows(ctx context.Context, rows *sql.Row
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at in Storage.processExpenseRows() function | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to get categories, try again later.",
 			}
 		}
 
@@ -751,9 +734,8 @@ func (mySql *MySQLStorage) processExpenseRows(ctx context.Context, rows *sql.Row
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to parse updated_at in Storage.processExpenseRows() function | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to get categories, try again later.",
 			}
 		}
 
@@ -769,9 +751,8 @@ func (mySql *MySQLStorage) processExpenseRows(ctx context.Context, rows *sql.Row
 	if err := rows.Err(); err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to iterate rows in Storage.processExpenseRows() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get categories, try again later.",
 		}
 	}
 
@@ -803,9 +784,8 @@ func (mySql *MySQLStorage) GetExpenseCategoryStats(ctx context.Context, userId s
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to get expense categories with max_amount <= 500 in Storage.GetExpenseCategoryStats() function | Error: %v", traceID, err)
 		return budget.ExpenseStatsResponse{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get category statistics, try again later",
 		}
 	}
 
@@ -817,9 +797,8 @@ func (mySql *MySQLStorage) GetExpenseCategoryStats(ctx context.Context, userId s
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.GetExpenseCategoryStats() function | Error: %v", traceID, err)
 			return budget.ExpenseStatsResponse{}, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to get category statistics, try again later",
 			}
 		}
 		statsRaw = append(statsRaw, stat)
@@ -827,9 +806,8 @@ func (mySql *MySQLStorage) GetExpenseCategoryStats(ctx context.Context, userId s
 	if err := rows.Err(); err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to iterate rows in Storage.GetExpenseCategoryStats() function | Error: %v", traceID, err)
 		return budget.ExpenseStatsResponse{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get category statistics, try again later",
 		}
 	}
 
@@ -873,9 +851,8 @@ func (mySql *MySQLStorage) GetIncomeCategoryStats(ctx context.Context, userId st
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to get expense categories with target_amount <= 500 in Storage.GetIncomeCategoryStats() function | Error: %v", traceID, err)
 		return budget.IncomeStatsResponse{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get category statistics, try again later",
 		}
 	}
 
@@ -887,9 +864,8 @@ func (mySql *MySQLStorage) GetIncomeCategoryStats(ctx context.Context, userId st
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.GetIncomeCategoryStats() function | Error: %v", traceID, err)
 			return budget.IncomeStatsResponse{}, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to get category statistics, try again later",
 			}
 		}
 		statsRaw = append(statsRaw, stat)
@@ -897,9 +873,8 @@ func (mySql *MySQLStorage) GetIncomeCategoryStats(ctx context.Context, userId st
 	if err := rows.Err(); err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to iterate rows in Storage.GetIncomeCategoryStats() function | Error: %v", traceID, err)
 		return budget.IncomeStatsResponse{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get category statistics, try again later",
 		}
 	}
 
@@ -935,9 +910,8 @@ func (mySql *MySQLStorage) GetTransactionStats(ctx context.Context, userId strin
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to get transaction stats in Storage.GetTransactionStats() function | Error: %v", traceID, err)
 		return budget.TransactionStatsResponse{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue with ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get transaction statistics, try again later",
 		}
 	}
 
@@ -959,9 +933,8 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(ctx context.Context, use
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to get all expense categories in Storage.GetFilteredExpenseCategories() function | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to get categories.",
 			}
 		}
 
@@ -1006,9 +979,8 @@ func (mySql *MySQLStorage) GetFilteredExpenseCategories(ctx context.Context, use
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered expense categories in Storage.GetFilteredExpenseCategories() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get the categories.",
 		}
 	}
 	categories, err := mySql.processExpenseRows(ctx, rows, userID)
@@ -1027,9 +999,8 @@ func (mySql *MySQLStorage) UpdateExpenseCategory(ctx context.Context, userID str
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to update expense category in Storage.UpdateExpenseCategory() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to update the category.",
 		}
 	}
 
@@ -1044,9 +1015,8 @@ func (mySql *MySQLStorage) UpdateExpenseCategory(ctx context.Context, userID str
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.UpdateExpenseCategory() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to update the category.",
 		}
 	}
 
@@ -1054,18 +1024,16 @@ func (mySql *MySQLStorage) UpdateExpenseCategory(ctx context.Context, userID str
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at field in Storage.UpdateExpenseCategory() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to update the category.",
 		}
 	}
 	category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to parse updated_at field in Storage.UpdateExpenseCategory() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to update the category.",
 		}
 	}
 
@@ -1086,9 +1054,8 @@ func (mySql *MySQLStorage) UpdateIncomeCategory(ctx context.Context, userID stri
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] |  failed to update income category in Storage.UpdateIncomeCategory() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to update the category.",
 		}
 	}
 
@@ -1103,9 +1070,8 @@ func (mySql *MySQLStorage) UpdateIncomeCategory(ctx context.Context, userID stri
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.UpdateIncomeCategory() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to update the category.",
 		}
 	}
 
@@ -1113,9 +1079,8 @@ func (mySql *MySQLStorage) UpdateIncomeCategory(ctx context.Context, userID stri
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at field in Storage.UpdateIncomeCategory() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to update the category.",
 		}
 	}
 
@@ -1123,9 +1088,8 @@ func (mySql *MySQLStorage) UpdateIncomeCategory(ctx context.Context, userID stri
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to parse updated_at field in Storage.UpdateIncomeCategory() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to update the category.",
 		}
 
 	}
@@ -1146,9 +1110,8 @@ func (mySql *MySQLStorage) DeleteExpenseCategory(ctx context.Context, userId str
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] |  failed to start SQL transaction in Storage.DeleteExpenseCategory() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete the category.",
 		}
 	}
 
@@ -1164,9 +1127,8 @@ func (mySql *MySQLStorage) DeleteExpenseCategory(ctx context.Context, userId str
 		tx.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] |  failed to delete all related transactions in Storage.DeleteExpenseCategory() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete the category.",
 		}
 	}
 
@@ -1176,9 +1138,8 @@ func (mySql *MySQLStorage) DeleteExpenseCategory(ctx context.Context, userId str
 		tx.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] |  failed to delete expense category in Storage.DeleteExpenseCategory() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete the category.",
 		}
 	}
 
@@ -1187,27 +1148,24 @@ func (mySql *MySQLStorage) DeleteExpenseCategory(ctx context.Context, userId str
 		tx.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] | failed to check expense category delete status in Storage.DeleteExpenseCategory() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete the category.",
 		}
 
 	}
 	if rowsAffected == 0 {
 		tx.Rollback()
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    "The category does not exist.",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInternal,
+			Message: "The category does not exist.",
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to commit  SQL transaction in Storage.DeleteExpenseCategory() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete the category.",
 		}
 	}
 
@@ -1224,9 +1182,8 @@ func (mySql *MySQLStorage) getCategoryNameById(traceID string, userID string, ca
 		query = "SELECT name FROM income_category WHERE created_by = ? AND id = ?;"
 	default:
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "Invalid category type.",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Invalid category type.",
 		}
 	}
 
@@ -1236,16 +1193,14 @@ func (mySql *MySQLStorage) getCategoryNameById(traceID string, userID string, ca
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInvalidInput,
-				Message:    "The category does not exists.",
-				IsFeedBack: false,
+				Code:    appErrors.ErrInvalidInput,
+				Message: "The category does not exists.",
 			}
 		}
 		logging.Logger.Errorf("[TraceID=%s] | failed to get category name by id from Storage.getCategoryNameById() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get category name.",
 		}
 	}
 
@@ -1259,9 +1214,8 @@ func (mySql *MySQLStorage) DeleteIncomeCategory(ctx context.Context, userId stri
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] |  failed to start SQL transaction in Storage.DeleteIncomeCategory() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete the category.",
 		}
 	}
 
@@ -1277,9 +1231,8 @@ func (mySql *MySQLStorage) DeleteIncomeCategory(ctx context.Context, userId stri
 		tx.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] |  failed to delete all related transactions in Storage.DeleteIncomeCategory() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete the category.",
 		}
 	}
 
@@ -1289,9 +1242,8 @@ func (mySql *MySQLStorage) DeleteIncomeCategory(ctx context.Context, userId stri
 		tx.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] | failed to delete income category in Storage.DeleteIncomeCategory() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete the category.",
 		}
 	}
 
@@ -1300,27 +1252,24 @@ func (mySql *MySQLStorage) DeleteIncomeCategory(ctx context.Context, userId stri
 		tx.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] | failed to check income category delete status in Storage.DeleteIncomeCategory() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete the category.",
 		}
 	}
 
 	if rowsAffected == 0 {
 		tx.Rollback()
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "The category does not exist.",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "The category does not exist.",
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		logging.Logger.Errorf("[TraceID=%s] |  failed to commit SQL transaction  in Storage.DeleteIncomeCategory() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete the category.",
 		}
 	}
 
@@ -1341,9 +1290,8 @@ func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.processTransactionRows() | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to process transactions, try again later.",
 			}
 		}
 
@@ -1351,9 +1299,8 @@ func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at in Storage.processTransactionRows() | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to process transactions, try again later.",
 			}
 		}
 
@@ -1363,9 +1310,8 @@ func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql
 	if err := rows.Err(); err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to iterate rows in Storage.processTransactionRows() | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to process transactions, try again later.",
 		}
 	}
 
@@ -1383,9 +1329,8 @@ func (mySql *MySQLStorage) GetFilteredTransactions(ctx context.Context, userID s
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to get all transactions from Storage.GetFilteredTransactions() function | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-				IsFeedBack: true,
+				Code:    appErrors.ErrInternal,
+				Message: "Failed to get transactions, try again later.",
 			}
 		}
 
@@ -1429,9 +1374,8 @@ func (mySql *MySQLStorage) GetFilteredTransactions(ctx context.Context, userID s
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered transactions from Storage.GetFilteredTransactions() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get transactions, try again later.",
 		}
 	}
 
@@ -1454,17 +1398,15 @@ func (mySql *MySQLStorage) GetTransactionById(ctx context.Context, userID string
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return budget.Transaction{}, appErrors.ErrorResponse{
-				Code:       appErrors.ErrInvalidInput,
-				Message:    "The category does not exist.",
-				IsFeedBack: false,
+				Code:    appErrors.ErrInvalidInput,
+				Message: "The category does not exist.",
 			}
 		}
 
 		logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.GetTransactionById() function | Error : %v", traceID, err)
 		return budget.Transaction{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get transcation",
 		}
 	}
 
@@ -1472,9 +1414,8 @@ func (mySql *MySQLStorage) GetTransactionById(ctx context.Context, userID string
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at field in Storage.GetTransactionById() function | Error : %v", traceID, err)
 		return budget.Transaction{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get transcation",
 		}
 	}
 
@@ -1491,24 +1432,21 @@ func (mySql *MySQLStorage) ValidateUser(ctx context.Context, credentials auth.Us
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return auth.User{}, appErrors.ErrorResponse{
-				Code:       appErrors.ErrAuth,
-				Message:    "Username or Password is incorrect",
-				IsFeedBack: false,
+				Code:    appErrors.ErrAuth,
+				Message: "Username or Password is incorrect",
 			}
 		}
 
 		logging.Logger.Errorf("[TraceID=%s] | failed to scan user row in Storage.ValidateUser() function | Error : %v", traceID, err)
 		return auth.User{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "UNKNOWN",
 		}
 	}
 	if auth.ComparePasswords(user.PasswordHashed, credentials.PasswordPlain) != true {
 		return auth.User{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "Username or Password is incorrect",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Username or Password is incorrect",
 		}
 	}
 
@@ -1528,9 +1466,8 @@ func (mySql *MySQLStorage) IsUserExists(ctx context.Context, username string) (b
 		traceID := contextutil.TraceIDFromContext(ctx)
 		logging.Logger.Errorf("[TraceID=%s] | failed to check user existance in Storage.IsUserExists() function |  Error: %v", traceID, err)
 		return false, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to check user existance, try again later.",
 		}
 	}
 
@@ -1550,9 +1487,8 @@ func (mySql *MySQLStorage) IsEmailConfirmed(ctx context.Context, emailAddress st
 
 		logging.Logger.Errorf("[TraceID=%s] | failed to check email confirmation in Storage.IsEmailConfirmed() function | Error: %v", traceID, err)
 		return false, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to check email address, try again later.",
 		}
 	}
 
@@ -1567,9 +1503,8 @@ func (mySql *MySQLStorage) LogoutUser(ctx context.Context, userId string, token 
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to logout user in Storage.LogoutUser() function | Error: %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to logout, try again later.",
 		}
 	}
 
@@ -1583,27 +1518,24 @@ func (mySql *MySQLStorage) GetUserData(ctx context.Context, userId string) (budg
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered expense categories in Storage.GetUserData() function | Error: %v", traceID, err)
 		return budget.UserDataResponse{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get account info, try later.",
 		}
 	}
 	incomeCategories, err := mySql.GetFilteredIncomeCategories(ctx, userId, &budget.IncomeCategoryList{IsAllNil: true})
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered income categories in Storage.GetUserData() function | Error: %v", traceID, err)
 		return budget.UserDataResponse{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get account info, try later.",
 		}
 	}
 	transactions, err := mySql.GetFilteredTransactions(ctx, userId, &budget.TransactionList{IsAllNil: true})
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered transactions in Storage.GetUserData() function | Error: %v", traceID, err)
 		return budget.UserDataResponse{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get account info, try later.",
 		}
 	}
 
@@ -1623,9 +1555,8 @@ func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, delete
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to start SQL transaction in Storage.DeleteUser() function | Error: %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete account, try later.",
 		}
 	}
 
@@ -1636,27 +1567,24 @@ func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, delete
 	if err := row.Scan(&hashedPassword); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return appErrors.ErrorResponse{
-				Code:       appErrors.ErrInternal,
-				Message:    "User does not exist.",
-				IsFeedBack: false,
+				Code:    appErrors.ErrInternal,
+				Message: "User does not exist.",
 			}
 		}
 
 		txn.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] | failed to scan user row in Storage.DeleteUser() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete account, try later.",
 		}
 	}
 
 	if auth.ComparePasswords(hashedPassword, deleteReq.Password) != true {
 		txn.Rollback()
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "Password is wrong",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Password is wrong",
 		}
 	}
 
@@ -1666,9 +1594,8 @@ func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, delete
 		txn.Rollback()
 		logging.Logger.Errorf("[TraceID=%s]| failed to delete all user sessions in Storage.DeleteUser() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete account, try later.",
 		}
 	}
 
@@ -1678,9 +1605,8 @@ func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, delete
 		txn.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] | failed to delete all user transactions in Storage.DeleteUser() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete account, try later.",
 		}
 	}
 
@@ -1690,9 +1616,8 @@ func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, delete
 		txn.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] | failed to delete all user income categories in Storage.DeleteUser() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete account, try later.",
 		}
 	}
 
@@ -1702,9 +1627,8 @@ func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, delete
 		txn.Rollback()
 		logging.Logger.Errorf("[TraceID=%s]| failed to delete all user expense categories in Storage.DeleteUser() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete account, try later.",
 		}
 	}
 
@@ -1714,9 +1638,8 @@ func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, delete
 		txn.Rollback()
 		logging.Logger.Errorf("[TraceID=%s]| failed to delete user in Storage.DeleteUser() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete account, try later.",
 		}
 	}
 
@@ -1726,13 +1649,30 @@ func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, delete
 		txn.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] | failed to insert delete info in Storage.DeleteUser() function | Error : %v", traceID, err)
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to delete account, try later.",
 		}
 	}
 
 	return nil
+}
+
+func (mySql *MySQLStorage) GetAccountInfo(ctx context.Context, userId string) (budget.AccountInfo, error) {
+	var info budget.AccountInfo
+
+	query := `
+		SELECT username, fullname, email, joined_at
+		FROM user
+		WHERE id = ?
+	`
+
+	row := mySql.db.QueryRowContext(ctx, query, userId)
+	err := row.Scan(&info.Username, &info.Fullname, &info.Email, &info.JoinedAt)
+	if err != nil {
+		return budget.AccountInfo{}, fmt.Errorf("GetAccountInfo: %w", err)
+	}
+
+	return info, nil
 }
 
 func (mySql *MySQLStorage) GetStorageType() string {

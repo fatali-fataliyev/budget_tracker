@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode"
 
-	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
+	appErrors "github.com/fatali-fataliyev/budget_tracker/customErrors"
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
 	"github.com/fatali-fataliyev/budget_tracker/internal/contextutil"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
@@ -72,6 +72,7 @@ type Storage interface {
 	LogoutUser(ctx context.Context, userId string, token string) error
 	DeleteUser(ctx context.Context, userId string, deleteReq auth.DeleteUser) error
 	GetUserData(ctx context.Context, userId string) (UserDataResponse, error)
+	GetAccountInfo(ctx context.Context, userId string) (AccountInfo, error)
 	GetStorageType() string
 }
 
@@ -175,23 +176,20 @@ func (bt *BudgetTracker) IsUserExists(ctx context.Context, username string) (boo
 func (bt *BudgetTracker) SaveUser(ctx context.Context, newUser auth.NewUser) (string, error) {
 	if newUser.UserName == "" {
 		return "", appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "Username cannot be empty!",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Username cannot be empty!",
 		}
 	}
 	if newUser.PasswordPlain == "" {
 		return "", appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "Password cannot be empty!",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Password cannot be empty!",
 		}
 	}
 	if newUser.Email == "" {
 		return "", appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "Password cannot be empty!",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Password cannot be empty!",
 		}
 	}
 
@@ -201,9 +199,8 @@ func (bt *BudgetTracker) SaveUser(ctx context.Context, newUser auth.NewUser) (st
 	}
 	if isUserExists {
 		return "", appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "Username already taken!",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Username already taken!",
 		}
 	}
 	isEmailTaken, err := bt.storage.IsEmailConfirmed(ctx, newUser.Email)
@@ -214,9 +211,8 @@ func (bt *BudgetTracker) SaveUser(ctx context.Context, newUser auth.NewUser) (st
 	}
 	if isEmailTaken {
 		return "", appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "Email already taken!",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Email already taken!",
 		}
 	}
 	hashedPassword, err := auth.HashPassword(ctx, newUser.PasswordPlain)
@@ -245,12 +241,10 @@ func (bt *BudgetTracker) SaveUser(ctx context.Context, newUser auth.NewUser) (st
 	token, err := bt.GenerateSession(ctx, credentials)
 	if err != nil {
 		return "", appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    "Registration completed but something went wrong, try log in please.",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInternal,
+			Message: "Registration completed but something went wrong, try log in please.",
 		}
 	}
-
 	return token, nil
 }
 
@@ -276,37 +270,32 @@ func (bt *BudgetTracker) SaveTransaction(ctx context.Context, userId string, tra
 	}
 	if IsFloatZero(transaction.Amount) {
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "Transaction amount is zero or very close to zero, please enter valid transaction amount.",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Transaction amount is zero or very close to zero, please enter valid transaction amount.",
 		}
 	}
 	if transaction.Amount > MAX_TRANSACTION_AMOUNT_LIMIT {
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Maximum allowed amount per transaction is %d", MAX_TRANSACTION_AMOUNT_LIMIT),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Maximum allowed amount per transaction is %d", MAX_TRANSACTION_AMOUNT_LIMIT),
 		}
 	}
 	if len(transaction.CategoryName) > MAX_TRANSACTION_CATEGORY_NAME_LENGTH {
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category name so long, maxiumum allowed cateogory name length %d", MAX_TRANSACTION_CATEGORY_NAME_LENGTH),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Category name so long, maxiumum allowed cateogory name length %d", MAX_TRANSACTION_CATEGORY_NAME_LENGTH),
 		}
 	}
 	if len(transaction.Currency) > MAX_TRANSACTION_CURRENCY_LENGTH {
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Currency so long, maximum allowed currency length is %d", MAX_TRANSACTION_CURRENCY_LENGTH),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Currency so long, maximum allowed currency length is %d", MAX_TRANSACTION_CURRENCY_LENGTH),
 		}
 	}
 	if len(transaction.Note) > MAX_TRANSACTION_NOTE_LENGTH {
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Note so long, maximum allowed note length is %d", MAX_TRANSACTION_NOTE_LENGTH),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Note so long, maximum allowed note length is %d", MAX_TRANSACTION_NOTE_LENGTH),
 		}
 	}
 
@@ -333,9 +322,8 @@ func (bt *BudgetTracker) ProcessImage(ctx context.Context, imageRawText string) 
 
 	if imageRawText == "" {
 		return ProcessedImageResponse{}, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "Image raw text is empty.",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Image raw text is empty.",
 		}
 	}
 
@@ -353,13 +341,6 @@ func (bt *BudgetTracker) ProcessImage(ctx context.Context, imageRawText string) 
 		logging.Logger.Warnf("[TraceID=%s] | failed to convert string number to float64 from Service.ProcessImage() function, Error: %v", traceID, err)
 	}
 
-	symbolRegex := regexp.MustCompile(`[$€£¥₹₽₩₪₫₴₦₵₲₺₡₨៛฿₸]`)
-	symbolMatches := symbolRegex.FindAllString(imageRawText, -1)
-
-	for _, symbol := range symbolMatches {
-		result.CurrenciesSymbol = append(result.CurrenciesSymbol, symbol)
-	}
-
 	isoRegex := regexp.MustCompile(`\b[A-Z]{3}\b`)
 	isoMatches := isoRegex.FindAllString(imageRawText, -1)
 
@@ -375,23 +356,20 @@ func (bt *BudgetTracker) SaveExpenseCategory(ctx context.Context, userId string,
 
 	if category.Name == "" {
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    "Category cannot be empty!",
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Category cannot be empty!",
 		}
 	}
 	if category.MaxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category maximum amount is too large, allowed maximum amount is %2.f", MAX_CATEGORY_AMOUNT_LIMIT),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Category maximum amount is too large, allowed maximum amount is %2.f", MAX_CATEGORY_AMOUNT_LIMIT),
 		}
 	}
 	if len(category.Name) > MAX_CATEGORY_NAME_LENGTH {
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Category name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
 		}
 	}
 
@@ -419,17 +397,15 @@ func (bt *BudgetTracker) SaveExpenseCategory(ctx context.Context, userId string,
 func (bt *BudgetTracker) SaveIncomeCategory(ctx context.Context, userId string, category IncomeCategoryRequest) error {
 	if category.TargetAmount > MAX_TARGET_AMOUNT_LIMIT {
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category maximum amount is too large, allowed maximum amount is %2.f", MAX_CATEGORY_AMOUNT_LIMIT),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Category maximum amount is too large, allowed maximum amount is %2.f", MAX_CATEGORY_AMOUNT_LIMIT),
 		}
 	}
 
 	if len(category.Name) > MAX_CATEGORY_NAME_LENGTH {
 		return appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Category name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
 		}
 	}
 
@@ -548,23 +524,20 @@ func (bt *BudgetTracker) GetFilteredExpenseCategories(ctx context.Context, userI
 func (bt *BudgetTracker) UpdateExpenseCategory(ctx context.Context, userId string, fields UpdateExpenseCategoryRequest) (*ExpenseCategoryResponse, error) {
 	if fields.NewMaxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category new maximum is too larger, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Category new maximum is too larger, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
 		}
 	}
 	if len(fields.NewName) > MAX_CATEGORY_NAME_LENGTH {
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category new name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Category new name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
 		}
 	}
 	if len(fields.NewNote) > MAX_TRANSACTION_NOTE_LENGTH {
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category new note so long, allowed maximum length is %d", MAX_TRANSACTION_NOTE_LENGTH),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Category new note so long, allowed maximum length is %d", MAX_TRANSACTION_NOTE_LENGTH),
 		}
 	}
 
@@ -600,23 +573,20 @@ func (bt *BudgetTracker) UpdateExpenseCategory(ctx context.Context, userId strin
 func (bt *BudgetTracker) UpdateIncomeCategory(ctx context.Context, userId string, fields UpdateIncomeCategoryRequest) (*IncomeCategoryResponse, error) {
 	if fields.NewTargetAmount > MAX_TARGET_AMOUNT_LIMIT {
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category new target amount is too larger, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Category new target amount is too larger, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
 		}
 	}
 	if len(fields.NewName) > MAX_CATEGORY_NAME_LENGTH {
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category new name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Category new name so long, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
 		}
 	}
 	if len(fields.NewNote) > MAX_TRANSACTION_NOTE_LENGTH {
 		return nil, appErrors.ErrorResponse{
-			Code:       appErrors.ErrInvalidInput,
-			Message:    fmt.Sprintf("Category new note so long, allowed maximum length is %d", MAX_TRANSACTION_NOTE_LENGTH),
-			IsFeedBack: false,
+			Code:    appErrors.ErrInvalidInput,
+			Message: fmt.Sprintf("Category new note so long, allowed maximum length is %d", MAX_TRANSACTION_NOTE_LENGTH),
 		}
 	}
 
@@ -710,4 +680,12 @@ func (bt *BudgetTracker) DeleteUser(ctx context.Context, userId string, deleteRe
 	}
 
 	return nil
+}
+
+func (bt *BudgetTracker) GetAccountInfo(ctx context.Context, userId string) (AccountInfo, error) {
+	accInfo, err := bt.storage.GetAccountInfo(ctx, userId)
+	if err != nil {
+		return AccountInfo{}, err
+	}
+	return accInfo, nil
 }

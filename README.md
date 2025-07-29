@@ -276,6 +276,31 @@ paths:
       responses:
         "200":
           description: Zip file response.
+  /account:
+    get:
+      summary: Get user information
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: User info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  username:
+                    type: string
+                    example: john_doe
+                  fullname:
+                    type: string
+                    example: John K. Doe
+                  email:
+                    type: string
+                    example: johndoe@gmail.com
+                  joined_at:
+                    type: string
+                    example: 2025-06-28 18:19:49
 
   /transaction:
     post:

@@ -15,7 +15,6 @@ import (
 var Logger *logrus.Logger
 
 func Init(level string) error {
-	// Logger.WithFields(logrus.Fields{"traceID": "blabala"}).Info("something")
 	Logger = logrus.New()
 	err := gotenv.Load()
 	if err != nil {
@@ -48,7 +47,6 @@ func Init(level string) error {
 	case "error":
 		Logger.SetLevel(logrus.ErrorLevel)
 	default:
-		fmt.Println("default log level is: INFO")
 		Logger.SetLevel(logrus.InfoLevel)
 	}
 	currentDate := time.Now().Format("02_01_2006")
@@ -68,10 +66,3 @@ func Init(level string) error {
 	Logger.SetOutput(io.MultiWriter(os.Stdout, file))
 	return nil
 }
-
-// func Info(ctx context.Context, msg string) {
-// 	traceID, ok := ctx.Value("traceID").(string)
-// 	_, _ = traceID, ok
-// 	// TODO extract traceID which is injected in middlewhare
-// 	Logger.WithFields(logrus.Fields{"traceUD": "hardcodedTracd"}).Info(msg)
-// }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
+	appErrors "github.com/fatali-fataliyev/budget_tracker/customErrors"
 	"github.com/fatali-fataliyev/budget_tracker/internal/contextutil"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
 	"golang.org/x/crypto/bcrypt"
@@ -17,9 +17,8 @@ func HashPassword(ctx context.Context, password string) (string, error) {
 		logging.Logger.Errorf("[Trace-ID: %s] | failed to hash user password in HashPassword() function | Error : %v", traceID, err)
 
 		return "", appErrors.ErrorResponse{
-			Code:       appErrors.ErrInternal,
-			Message:    fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: fmt.Sprintf("Please report this issue the  following ID: [%s]", traceID),
 		}
 	}
 	return string(hashedPassword), nil

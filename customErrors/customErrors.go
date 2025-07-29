@@ -1,4 +1,4 @@
-package errors
+package customErrors
 
 import (
 	"fmt"
@@ -14,11 +14,10 @@ const (
 )
 
 type ErrorResponse struct {
-	Code       string `json:"code"`
-	Message    string `json:"message"`
-	IsFeedBack bool   `json:"is_feedback"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 func (e ErrorResponse) Error() string {
-	return fmt.Sprintf("code: %s, isFeedback: %v, message: %s", e.Code, e.IsFeedBack, e.Message)
+	return fmt.Sprintf("code: %s, message: %s", e.Code, e.Message)
 }

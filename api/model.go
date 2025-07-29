@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
+	appErrors "github.com/fatali-fataliyev/budget_tracker/customErrors"
 
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 )
@@ -154,6 +154,13 @@ type ProcessedImageResponseItem struct {
 	CurrenciesSymbol []string  `json:"currencies_symbol"`
 }
 
+type AccountInfo struct {
+	Username string `json:"username"`
+	Fullname string `json:"fullname"`
+	Email    string `json:"email"`
+	JoinedAt string `json:"joined_at"`
+}
+
 func HttpStatusFromErrorCode(errorCode string) int {
 	switch errorCode {
 	case appErrors.ErrNotFound:
@@ -208,6 +215,15 @@ func TransactionToHttp(transcation budget.Transaction) TransactionItem {
 	}
 }
 
+func AccountInfoToHttp(accInfo budget.AccountInfo) AccountInfo {
+	return AccountInfo{
+		Username: accInfo.Username,
+		Fullname: accInfo.Fullname,
+		Email:    accInfo.Email,
+		JoinedAt: accInfo.JoinedAt,
+	}
+}
+
 func ExpenseCategoryToHttp(category budget.ExpenseCategoryResponse) ExpenseCategoryResponseItem {
 	return ExpenseCategoryResponseItem{
 		ID:           category.ID,
@@ -240,9 +256,8 @@ func IncomeCategoryToHttp(category budget.IncomeCategoryResponse) IncomeCategory
 
 func ProcessedImageToHttp(processedImg budget.ProcessedImageResponse) ProcessedImageResponseItem {
 	return ProcessedImageResponseItem{
-		Amounts:          processedImg.Amounts,
-		CurrenciesISO:    processedImg.CurrenciesISO,
-		CurrenciesSymbol: processedImg.CurrenciesSymbol,
+		Amounts:       processedImg.Amounts,
+		CurrenciesISO: processedImg.CurrenciesISO,
 	}
 }
 

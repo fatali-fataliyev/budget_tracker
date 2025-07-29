@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"time"
 
-	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
+	appErrors "github.com/fatali-fataliyev/budget_tracker/customErrors"
 )
 
 const (

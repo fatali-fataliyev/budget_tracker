@@ -13,7 +13,7 @@ import (
 	"os"
 
 	"github.com/0xcafe-io/iz"
-	appErrors "github.com/fatali-fataliyev/budget_tracker/errors"
+	appErrors "github.com/fatali-fataliyev/budget_tracker/customErrors"
 	"github.com/fatali-fataliyev/budget_tracker/internal/auth"
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 	"github.com/fatali-fataliyev/budget_tracker/internal/contextutil"
@@ -137,28 +137,29 @@ func (api *Api) ProcessImageHandler(r *iz.Request) iz.Responder {
 
 	err = r.ParseMultipartForm(MAX_IMAGE_UPLOAD_SIZE)
 	if err != nil {
-		return iz.Respond().Status(400).JSON(OperationResponse{
-			Code:    FAIL_CODE,
+		return iz.Respond().Status(400).JSON(appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
 			Message: "Maximum image size is 1MB",
 		})
 	}
 
 	file, _, err := r.FormFile("image")
 	if err != nil {
-		return iz.Respond().Status(400).JSON(OperationResponse{
-			Code:    FAIL_CODE,
-			Message: "Invalid image form",
+		return iz.Respond().Status(400).JSON(appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Invalid Image",
 		})
 	}
 	defer file.Close()
 
 	buf := new(bytes.Buffer)
 	if _, err := io.Copy(buf, file); err != nil {
-		return iz.Respond().Status(500).JSON(OperationResponse{
-			Code:    FAIL_CODE,
-			Message: "Failed to read uploaded file",
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to process uploaded image",
 		})
 	}
+
 	imageType := http.DetectContentType(buf.Bytes())
 	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
 
@@ -183,7 +184,7 @@ func RequestOCRApi(ctx context.Context, base64Img string) (string, error) {
 
 	ocrApiKey := os.Getenv("OCR_APIKEY")
 	if ocrApiKey == "" {
-		return "", fmt.Errorf("OCR key is required")
+		return "", fmt.Errorf("OCR key is required for processing transaction images")
 	}
 
 	config := ocr.InitConfig(ocrApiKey, "auto", ocr.OCREngine2)
@@ -191,9 +192,8 @@ func RequestOCRApi(ctx context.Context, base64Img string) (string, error) {
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to request Api.RequestOCRApi() | Error: %v", traceID, err)
 		return "", appErrors.ErrorResponse{
-			Code:       os.ErrInvalid.Error(),
-			Message:    fmt.Sprintf("Failed to process your image :( report this issue the following ID: [%s]", traceID),
-			IsFeedBack: true,
+			Code:    appErrors.ErrInternal,
+			Message: fmt.Sprintf("Failed to process image"),
 		}
 	}
 
@@ -292,7 +292,7 @@ func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	if newIncCategoryReq.Name == "" {
 		return iz.Respond().Status(400).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrInvalidInput,
-			Message: "Cateogory name cannot be empty!",
+			Message: "Category name cannot be empty!",
 		})
 	}
 
@@ -309,7 +309,7 @@ func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
 
 	return iz.Respond().Status(201).JSON(OperationResponse{
 		Code:    SUCCESS_CODE,
-		Message: "Cateogry created successfully",
+		Message: "Category created successfully",
 	})
 }
 
@@ -745,7 +745,7 @@ func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
 
 	return iz.Respond().Status(200).JSON(OperationResponse{
 		Code:    SUCCESS_CODE,
-		Message: "Welcome back!",
+		Message: "Welcome",
 		Extra:   token,
 	})
 }
@@ -774,7 +774,7 @@ func (api *Api) LogoutUserHandler(r *iz.Request) iz.Responder {
 
 	return iz.Respond().Status(200).JSON(OperationResponse{
 		Code:    SUCCESS_CODE,
-		Message: "Bye!",
+		Message: "Bye",
 	})
 }
 
@@ -792,7 +792,7 @@ func (api *Api) DownloadUserData(w http.ResponseWriter, r *http.Request) {
 	userId, err := api.Service.CheckSession(ctx, token)
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | Session check failed: %v", traceID, err)
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		http.Error(w, "UNAUTHORIZED", http.StatusUnauthorized)
 		return
 	}
 
@@ -922,6 +922,33 @@ func (api *Api) DeleteUserHandler(r *iz.Request) iz.Responder {
 	})
 }
 
+func (api *Api) GetAccountInfo(r *iz.Request) iz.Responder {
+	traceID := uuid.NewString()
+	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
+	logging.Logger.Infof("[TraceID=%s] | Starting Api.GetAccountInfo()", traceID)
+
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+			Code:    appErrors.ErrAuth,
+			Message: "Authorization header is required.",
+		})
+	}
+
+	userId, err := api.Service.CheckSession(ctx, token)
+	if err != nil {
+		return RespondError(err)
+	}
+
+	accInfoRaw, err := api.Service.GetAccountInfo(ctx, userId)
+	if err != nil {
+		return RespondError(err)
+	}
+	accInfo := AccountInfoToHttp(accInfoRaw)
+
+	return iz.Respond().Status(200).JSON(accInfo)
+}
+
 func RespondError(err error) iz.Responder {
 	var errResp appErrors.ErrorResponse
 	if errors.As(err, &errResp) {
@@ -929,9 +956,8 @@ func RespondError(err error) iz.Responder {
 	}
 
 	return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
-		Code:       appErrors.ErrInternal,
-		Message:    "UNEXPECTED ERROR HAPPEND :(",
-		IsFeedBack: false,
+		Code:    "UNKNOWN",
+		Message: "UNEXPECTED ERROR",
 	})
 
 }
