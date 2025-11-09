@@ -3,6 +3,8 @@
 A RESTful API built with Go 🦫 for managing personal budgets, expenses, and income categories, extract data from receipt.
 
 ---
+Frontend repo: https://github.com/fatali-fataliyev/budget_tracker_frontend
+---
 
 ## 📦 Requirements
 
