@@ -10,14 +10,10 @@ import (
 	"github.com/fatali-fataliyev/budget_tracker/internal/budget"
 	"github.com/fatali-fataliyev/budget_tracker/internal/storage"
 	"github.com/fatali-fataliyev/budget_tracker/logging"
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/rs/cors"
 )
 
 var bt budget.BudgetTracker // Global
-type contextKey string
-
-var traceIDKey contextKey = "traceID"
 
 var corsConf = cors.New(cors.Options{
 	AllowedOrigins:   []string{"*"},
@@ -31,6 +27,7 @@ func main() {
 		fmt.Println("failed to initialize logger: %w", err)
 		return
 	}
+
 	logging.Logger.Info("application starting...")
 
 	db, err := storage.Init()

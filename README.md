@@ -1,20 +1,23 @@
 # Budget Tracker App 💰
 
-A RESTful API built with Go 🦫 for managing personal budgets, expenses, and income categories, extract data from receipt.
+A RESTful API built with Go 🦫 for managing personal budgets, expenses, and incomes, extract data from receipt.
 
 ---
+
 #### Frontend repo: https://github.com/fatali-fataliyev/budget_tracker_frontend
+
 ---
 
 ## 📦 Requirements
 
-- Go 1.20 or later
+- Go 1.24 or later
 - MySQL database
 - Internet connection(for OCR_API)
+- Docker(optional)
 
 ---
 
-## ⚙️ Installation
+## 🔧 Manual Installation
 
 1. **Clone the repository**
 
@@ -32,7 +35,26 @@ A RESTful API built with Go 🦫 for managing personal budgets, expenses, and in
    ```bash
    go run main.go
    ```
-   **Note: You can define the port in the .env file. If you don't, port 8060 will be used by default.**
+
+---
+
+## ⚙️ Docker Installation
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/fatali-fataliyev/budget_tracker
+   cd budget-tracker
+   ```
+
+2. **Setup environment variables**
+   ```bash
+   cp env_sample .env
+   ```
+3. **Execute dockerization command**
+   ```bash
+   docker-compose up --build
+   ```
 
 ---
 

@@ -16,23 +16,21 @@ var Logger *logrus.Logger
 
 func Init(level string) error {
 	Logger = logrus.New()
-	err := gotenv.Load()
-	if err != nil {
-		return fmt.Errorf("failed to load env variables: %w", err)
-	}
+	_ = gotenv.Load()
 
 	appEnv := strings.ToLower(os.Getenv("APP_ENV"))
 
 	//default environment is development
 	if appEnv == "" {
-		appEnv = "development"
+		appEnv = "production"
 	}
-	if appEnv == "production" {
-		Logger.SetFormatter(&logrus.JSONFormatter{})
-	} else {
+	if appEnv == "development" {
 		Logger.SetFormatter(&logrus.TextFormatter{
 			FullTimestamp: true,
 		})
+
+	} else {
+		Logger.SetFormatter(&logrus.JSONFormatter{})
 	}
 
 	level = strings.ToLower(level)

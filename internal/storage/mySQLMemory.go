@@ -22,107 +22,101 @@ import (
 // --- INIT START --- //
 
 func Init() (*sql.DB, error) {
-	username := os.Getenv("DB_USER")
-	if username == "" {
-		return nil, fmt.Errorf("Missing required environment variable: DB_USER")
+	var isFullDsn bool
+	var db *sql.DB
+	var dbnameExistence string
+	var dbname string
+	var err error
+
+	fullDsn := os.Getenv("FULL_DSN")
+	if fullDsn != "" {
+		isFullDsn = true
 	}
 
-	password := os.Getenv("DB_PASS")
-	if password == "" {
-		return nil, fmt.Errorf("Missing required environment variable: DB_PASS")
+	if !isFullDsn {
+		username := os.Getenv("DB_USER")
+		password := os.Getenv("DB_PASS")
+		host := os.Getenv("DB_HOST")
+		port := os.Getenv("DB_PORT")
+		dbname = os.Getenv("DB_NAME")
+
+		if username == "" || password == "" || host == "" || port == "" {
+			return nil, fmt.Errorf("missing required DB environment variables")
+		}
+
+		logging.Logger.Info("trying to connect mysql without full DSN")
+		rootDbDsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/?parseTime=true", username, password, host, port)
+		db, err = sql.Open("mysql", rootDbDsn)
+	} else {
+		logging.Logger.Info("trying to connect mysql with full DSN")
+		db, err = sql.Open("mysql", fullDsn)
+
+		parts := strings.Split(fullDsn, "/")
+		if len(parts) > 1 {
+			dbname = strings.Split(parts[len(parts)-1], "?")[0]
+		}
 	}
 
-	host := os.Getenv("DB_HOST")
-	if host == "" {
-		return nil, fmt.Errorf("Missing required environment variable: DB_HOST")
-	}
-
-	port := os.Getenv("DB_PORT")
-	if port == "" {
-		return nil, fmt.Errorf("Missing required environment variable: DB_PORT")
-	}
-	dbname := os.Getenv("DB_NAME")
-
-	logging.Logger.Warn("connecting to MySQL...")
-
-	rootDbDsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/", username, password, host, port)
-	rootDb, err := sql.Open("mysql", rootDbDsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect root mysql: %v", err)
+		return nil, fmt.Errorf("failed to open mysql handle: %v", err)
 	}
-	defer rootDb.Close()
 
-	logging.Logger.Info("connected to root MySQL")
+	logging.Logger.Info("waiting for MySQL to become ready...")
+	connected := false
+	for i := range 15 {
+		if err := db.Ping(); err == nil {
+			connected = true
+			break
+		}
+		logging.Logger.Warnf("database not ready, retrying in 3s... (%d/15)", i+1)
+		time.Sleep(3 * time.Second)
+	}
+
+	if !connected {
+		return nil, fmt.Errorf("database unreachable after multiple attempts")
+	}
 
 	if dbname == "" {
-		logging.Logger.Warnf("DB_NAME env value is not set, default database name is 'budget_tracker' ")
 		dbname = "budget_tracker"
 	}
 
-	var isFirstTime bool
+	checkDbnameExistQuery := "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?"
+	err = db.QueryRow(checkDbnameExistQuery, dbname).Scan(&dbnameExistence)
 
-	var exists string
-	checkQuery := "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?"
-	err = rootDb.QueryRow(checkQuery, dbname).Scan(&exists)
 	if err == sql.ErrNoRows {
 		logging.Logger.Infof("database '%s' does not exist, creating...", dbname)
-
 		createDbSql := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;", dbname)
-		_, err = rootDb.Exec(createDbSql)
-		if err != nil {
+		if _, err := db.Exec(createDbSql); err != nil {
 			return nil, fmt.Errorf("failed to create database: %v", err)
 		}
-		isFirstTime = true
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to check database existence: %v", err)
-	} else {
-		logging.Logger.Infof("database [%s] is already exists", dbname)
 	}
 
-	dbTimezoneSql := "SET GLOBAL time_zone = '+00:00'"
-	_, err = rootDb.Exec(dbTimezoneSql)
+	_, err = db.Exec(fmt.Sprintf("USE `%s`", dbname))
 	if err != nil {
-		return nil, fmt.Errorf("failed to set MySQL timezone(0-UTC): %v", err)
+		return nil, fmt.Errorf("failed to switch to database %s: %v", dbname, err)
 	}
 
-	logging.Logger.Info("connecting to database")
-	dsnWithDb := fmt.Sprintf("%s%s?multiStatements=true", rootDbDsn, dbname)
-	db, err := sql.Open("mysql", dsnWithDb)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %v", err)
-	}
+	_, _ = db.Exec("SET GLOBAL time_zone = '+00:00'")
 
-	pingCounter := 0
-	for i := 0; i < 10; i++ {
-		pingCounter++
-		if err := db.Ping(); err == nil {
-			break
-		}
-		logging.Logger.Warnf("ping database...")
-		time.Sleep(3 * time.Second)
-	}
-	if pingCounter == 10 {
-		return nil, fmt.Errorf("failed to ping database after 10 attempts: %v", err)
-	}
+	logging.Logger.Info("connected to database successfully")
+	logging.Logger.Info("running migrations...")
 
-	logging.Logger.Info("connected to database")
-	logging.Logger.Info("running migrations")
-
-	err = runMigrations(db, isFirstTime)
-	if err != nil {
+	if err := runMigrations(db); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %v", err)
 	}
 
 	return db, nil
 }
 
-func runMigrations(db *sql.DB, isFirstTime bool) error {
+func runMigrations(db *sql.DB) error {
 	migrationFiles, err := getMigrationFiles("db/migrations")
 	if err != nil {
 		return fmt.Errorf("failed to get migration files: %v", err)
 	}
 
-	lastAppliedMigration, err := getLastAppliedMigration(db, isFirstTime)
+	lastAppliedMigration, err := getLastAppliedMigration(db)
 	if err != nil {
 		return fmt.Errorf("failed to get last applied migration name: %v", err)
 	}
@@ -143,10 +137,11 @@ func runMigrations(db *sql.DB, isFirstTime bool) error {
 
 		err = applyMigration(db, migrationFile, string(migrationContent))
 		if err != nil {
-			return fmt.Errorf("failed to apply this '%s' migration file, error: ", err)
+			return fmt.Errorf("failed to apply this '%s' migration file, error: %v", migrationFile, err)
 		}
 
 	}
+
 	logging.Logger.Info("all migrations applied successfully")
 	return nil
 }
@@ -168,21 +163,19 @@ func getMigrationFiles(dir string) ([]string, error) {
 	return migrationFiles, nil
 }
 
-func getLastAppliedMigration(db *sql.DB, isFirstTime bool) (string, error) {
-	if isFirstTime {
-		migrationCreateSql, err := os.ReadFile(filepath.Join("db/migrations/", "001_migration.sql"))
-		if err != nil {
-			return "", fmt.Errorf("failed to read migration table creation file: %v", err)
-		}
-		_, err = db.Exec(string(migrationCreateSql))
-		if err != nil {
-			return "", fmt.Errorf("failed to create migration table for first time: %v", err)
-		}
-		return "001_migration.sql", nil
+func getLastAppliedMigration(db *sql.DB) (string, error) {
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS migration (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        migration_name VARCHAR(255) NOT NULL UNIQUE,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );`)
+
+	if err != nil {
+		return "", err
 	}
 
 	var lastMigration string
-	err := db.QueryRow("SELECT migration_name FROM migration ORDER BY migration_name DESC LIMIT 1").Scan(&lastMigration)
+	err = db.QueryRow("SELECT migration_name FROM migration ORDER BY migration_name DESC LIMIT 1").Scan(&lastMigration)
 	if err == sql.ErrNoRows {
 		return "", nil
 	}
@@ -209,23 +202,26 @@ func applyMigration(db *sql.DB, name, sqlContent string) error {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
 
-	_, err = db.Exec(sqlContent)
-	if err != nil {
+	statements := strings.Split(sqlContent, ";")
+
+	for _, statement := range statements {
+		trimmedStmt := strings.TrimSpace(statement)
+		if trimmedStmt == "" {
+			continue
+		}
+
+		if _, err := txn.Exec(trimmedStmt); err != nil {
+			txn.Rollback()
+			return fmt.Errorf("migration statement failed: %w\nStatement: %s", err, trimmedStmt)
+		}
+	}
+
+	if _, err := txn.Exec("INSERT INTO migration (migration_name) VALUES (?)", name); err != nil {
 		txn.Rollback()
-		return fmt.Errorf("migration failed, rolled back: %w", err)
+		return fmt.Errorf("failed to record migration name: %w", err)
 	}
 
-	_, err = db.Exec("INSERT INTO migration (migration_name) VALUES (?)", name)
-	if err != nil {
-		txn.Rollback()
-		return fmt.Errorf("failed to record migration, rolled back: %w", err)
-	}
-
-	if err = txn.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+	return txn.Commit()
 }
 
 type MySQLStorage struct {
@@ -1583,7 +1579,7 @@ func (mySql *MySQLStorage) DeleteUser(ctx context.Context, userId string, delete
 		txn.Rollback()
 		return appErrors.ErrorResponse{
 			Code:    appErrors.ErrInvalidInput,
-			Message: "Password is wrong",
+			Message: "Username or Password is incorrect",
 		}
 	}
 

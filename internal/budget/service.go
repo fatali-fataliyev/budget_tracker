@@ -116,7 +116,7 @@ func (bt *BudgetTracker) GenerateSession(ctx context.Context, credentialsPure au
 		ID:        uuid.New().String(),
 		Token:     token,
 		CreatedAt: now,
-		ExpireAt:  now.AddDate(0, 3, 0),
+		ExpireAt:  now.AddDate(0, 1, 0),
 		UserID:    user.ID,
 	}
 
@@ -128,13 +128,11 @@ func (bt *BudgetTracker) GenerateSession(ctx context.Context, credentialsPure au
 }
 
 func (bt *BudgetTracker) CheckSession(ctx context.Context, token string) (string, error) {
-	traceID := contextutil.TraceIDFromContext(ctx)
 	session, err := bt.storage.GetSessionByToken(ctx, token)
 	if err != nil {
 		return "", err
 	}
 
-	logging.Logger.Infof("[TraceID=%s] | Service.CheckSession() Checking exists session", traceID)
 	userId, err := bt.storage.CheckSession(ctx, token)
 	if err != nil {
 		return "", err
@@ -145,7 +143,6 @@ func (bt *BudgetTracker) CheckSession(ctx context.Context, token string) (string
 
 	if daysUntilExpiry <= 5 {
 		newExpireAt := time.Now().AddDate(0, 1, 0)
-		logging.Logger.Infof("[TraceID=%s] | Service.CheckSession() calling storage.UpdateSession", traceID)
 		err := bt.storage.UpdateSession(ctx, userId, newExpireAt)
 		if err != nil {
 			return "", err
@@ -164,8 +161,6 @@ func (bt *BudgetTracker) IsUserExists(ctx context.Context, username string) (boo
 		}
 	}
 
-	traceID := contextutil.TraceIDFromContext(ctx)
-	logging.Logger.Infof("[TraceID=%s] | Service.IsUserExists calling for username=%s to storage layer", traceID, username)
 	result, err := bt.storage.IsUserExists(ctx, username)
 	if err != nil {
 		return false, err
@@ -189,7 +184,7 @@ func (bt *BudgetTracker) SaveUser(ctx context.Context, newUser auth.NewUser) (st
 	if newUser.Email == "" {
 		return "", appErrors.ErrorResponse{
 			Code:    appErrors.ErrInvalidInput,
-			Message: "Password cannot be empty!",
+			Message: "Email cannot be empty!",
 		}
 	}
 
@@ -204,8 +199,6 @@ func (bt *BudgetTracker) SaveUser(ctx context.Context, newUser auth.NewUser) (st
 		}
 	}
 	isEmailTaken, err := bt.storage.IsEmailConfirmed(ctx, newUser.Email)
-	traceID := contextutil.TraceIDFromContext(ctx)
-	logging.Logger.Infof("[TraceID=%s] | Service calling IsEmailConfirmed from storage layer", traceID)
 	if err != nil {
 		return "", err
 	}
@@ -395,10 +388,17 @@ func (bt *BudgetTracker) SaveExpenseCategory(ctx context.Context, userId string,
 }
 
 func (bt *BudgetTracker) SaveIncomeCategory(ctx context.Context, userId string, category IncomeCategoryRequest) error {
+	if category.Name == "" {
+		return appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Category cannot be empty!",
+		}
+	}
+
 	if category.TargetAmount > MAX_TARGET_AMOUNT_LIMIT {
 		return appErrors.ErrorResponse{
 			Code:    appErrors.ErrInvalidInput,
-			Message: fmt.Sprintf("Category maximum amount is too large, allowed maximum amount is %2.f", MAX_CATEGORY_AMOUNT_LIMIT),
+			Message: fmt.Sprintf("Category target amount is too large, allowed maximum target amount is %2.f", MAX_CATEGORY_AMOUNT_LIMIT),
 		}
 	}
 
@@ -525,7 +525,7 @@ func (bt *BudgetTracker) UpdateExpenseCategory(ctx context.Context, userId strin
 	if fields.NewMaxAmount > MAX_CATEGORY_AMOUNT_LIMIT {
 		return nil, appErrors.ErrorResponse{
 			Code:    appErrors.ErrInvalidInput,
-			Message: fmt.Sprintf("Category new maximum is too larger, allowed maximum length is %d", MAX_CATEGORY_NAME_LENGTH),
+			Message: fmt.Sprintf("Category new maximum amount is too larger, allowed maximum amount length is %f", MAX_CATEGORY_AMOUNT_LIMIT),
 		}
 	}
 	if len(fields.NewName) > MAX_CATEGORY_NAME_LENGTH {

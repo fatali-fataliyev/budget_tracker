@@ -39,7 +39,6 @@ func NewApi(service *budget.BudgetTracker) *Api {
 func (api *Api) SaveUserHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.SaveUserHandler()", traceID)
 
 	var newUserReq SaveUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&newUserReq); err != nil {
@@ -62,6 +61,7 @@ func (api *Api) SaveUserHandler(r *iz.Request) iz.Responder {
 
 	token, err := api.Service.SaveUser(ctx, newUser)
 	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to save user | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -75,11 +75,9 @@ func (api *Api) SaveUserHandler(r *iz.Request) iz.Responder {
 func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.SaveTransactionHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
-		logging.Logger.Errorf("[TraceID=%s] | Authorization failed", traceID)
 		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
 			Message: "Authorization header is required.",
@@ -108,6 +106,7 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 	}
 
 	if err := api.Service.SaveTransaction(ctx, userId, newTransaction); err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to save transaction | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -120,7 +119,6 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 func (api *Api) ProcessImageHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.ProcessImageHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -167,6 +165,7 @@ func (api *Api) ProcessImageHandler(r *iz.Request) iz.Responder {
 
 	imageRawText, err := RequestOCRApi(ctx, base64Img)
 	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to process reciept image | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -193,7 +192,7 @@ func RequestOCRApi(ctx context.Context, base64Img string) (string, error) {
 		logging.Logger.Errorf("[TraceID=%s] | failed to request Api.RequestOCRApi() | Error: %v", traceID, err)
 		return "", appErrors.ErrorResponse{
 			Code:    appErrors.ErrInternal,
-			Message: fmt.Sprintf("Failed to process image"),
+			Message: "Failed to process image",
 		}
 	}
 
@@ -203,7 +202,6 @@ func RequestOCRApi(ctx context.Context, base64Img string) (string, error) {
 func (api *Api) SaveExpenseCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.SaveExpenseCategoryHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -254,6 +252,7 @@ func (api *Api) SaveExpenseCategoryHandler(r *iz.Request) iz.Responder {
 	}
 
 	if err := api.Service.SaveExpenseCategory(ctx, userId, newExpCategory); err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to save expense category | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -266,7 +265,6 @@ func (api *Api) SaveExpenseCategoryHandler(r *iz.Request) iz.Responder {
 func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.SaveIncomeCategoryHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -304,6 +302,7 @@ func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	}
 
 	if err := api.Service.SaveIncomeCategory(ctx, userId, newIncCategory); err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to save income category | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -316,7 +315,6 @@ func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
 func (api *Api) GetExpenseCategoryStatsHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.GetExpenseCategoryStatsHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -333,6 +331,7 @@ func (api *Api) GetExpenseCategoryStatsHandler(r *iz.Request) iz.Responder {
 
 	statsRaw, err := api.Service.GetExpenseCategoryStats(ctx, userId)
 	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get expense category stats | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 	stats := ExpenseStatsToHttp(statsRaw)
@@ -343,7 +342,6 @@ func (api *Api) GetExpenseCategoryStatsHandler(r *iz.Request) iz.Responder {
 func (api *Api) GetIncomeCategoryStatsHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.GetIncomeCategoryStatsHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -360,6 +358,7 @@ func (api *Api) GetIncomeCategoryStatsHandler(r *iz.Request) iz.Responder {
 
 	statsRaw, err := api.Service.GetIncomeCategoryStats(ctx, userId)
 	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get income category stats | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 	stats := IncomeStatsToHttp(statsRaw)
@@ -370,7 +369,6 @@ func (api *Api) GetIncomeCategoryStatsHandler(r *iz.Request) iz.Responder {
 func (api *Api) GetTransactionStatsHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.GetIncomeCategoryStatsHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -387,6 +385,7 @@ func (api *Api) GetTransactionStatsHandler(r *iz.Request) iz.Responder {
 
 	statsRaw, err := api.Service.GetTransactionStats(ctx, userId)
 	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get transactions stats | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -399,7 +398,6 @@ func (api *Api) GetTransactionStatsHandler(r *iz.Request) iz.Responder {
 func (api *Api) GetFilteredIncomeCategoriesHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.GetFilteredIncomeCategoriesHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -424,6 +422,7 @@ func (api *Api) GetFilteredIncomeCategoriesHandler(r *iz.Request) iz.Responder {
 	categories, err := api.Service.GetFilteredIncomeCategories(ctx, userId, filter)
 
 	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered income categories | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -439,7 +438,6 @@ func (api *Api) GetFilteredIncomeCategoriesHandler(r *iz.Request) iz.Responder {
 func (api *Api) GetFilteredExpenseCategoriesHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.GetFilteredExpenseCategoriesHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -463,6 +461,7 @@ func (api *Api) GetFilteredExpenseCategoriesHandler(r *iz.Request) iz.Responder 
 
 	categories, err := api.Service.GetFilteredExpenseCategories(ctx, userId, filter)
 	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered expense categories | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -478,7 +477,6 @@ func (api *Api) GetFilteredExpenseCategoriesHandler(r *iz.Request) iz.Responder 
 func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.GetFilteredTransactionsHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -502,6 +500,7 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 
 	transactions, err := api.Service.GetFilteredTransactions(ctx, userId, filter)
 	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get filtered transactions | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -518,7 +517,6 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.GetTransactionByIdHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -535,6 +533,7 @@ func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 	txnId := r.PathValue("id")
 	txn, err := api.Service.GetTranscationById(ctx, userId, txnId)
 	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to get transaction by id | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -548,7 +547,6 @@ func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 func (api *Api) UpdateExpenseCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.UpdateExpenseCategoryHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -588,6 +586,7 @@ func (api *Api) UpdateExpenseCategoryHandler(r *iz.Request) iz.Responder {
 
 	updatedCategory, err := api.Service.UpdateExpenseCategory(ctx, userId, updateExpCategoryItem)
 	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to update expense category | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -601,7 +600,6 @@ func (api *Api) UpdateExpenseCategoryHandler(r *iz.Request) iz.Responder {
 func (api *Api) DeleteExpenseCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.DeleteExpenseCategoryHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -624,6 +622,7 @@ func (api *Api) DeleteExpenseCategoryHandler(r *iz.Request) iz.Responder {
 	}
 
 	if err := api.Service.DeleteExpenseCategory(ctx, userId, categoryId); err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to delete expense category | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -636,7 +635,6 @@ func (api *Api) DeleteExpenseCategoryHandler(r *iz.Request) iz.Responder {
 func (api *Api) UpdateIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.UpdateIncomeCategoryHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -675,6 +673,7 @@ func (api *Api) UpdateIncomeCategoryHandler(r *iz.Request) iz.Responder {
 
 	updatedCategory, err := api.Service.UpdateIncomeCategory(ctx, userId, updateIncCategoryItem)
 	if err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to update income category | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -688,7 +687,6 @@ func (api *Api) UpdateIncomeCategoryHandler(r *iz.Request) iz.Responder {
 func (api *Api) DeleteIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.DeleteIncomeCategoryHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -711,6 +709,7 @@ func (api *Api) DeleteIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	}
 
 	if err := api.Service.DeleteIncomeCategory(ctx, userId, categoryId); err != nil {
+		logging.Logger.Errorf("[TraceID=%s] | failed to delete income category | Error: %v", traceID, err)
 		return RespondError(err)
 	}
 
@@ -723,7 +722,6 @@ func (api *Api) DeleteIncomeCategoryHandler(r *iz.Request) iz.Responder {
 func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.LoginUserHandler()", traceID)
 
 	var loginRequest UserLoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&loginRequest); err != nil {
@@ -753,7 +751,6 @@ func (api *Api) LoginUserHandler(r *iz.Request) iz.Responder {
 func (api *Api) LogoutUserHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.LogoutUserHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -781,7 +778,6 @@ func (api *Api) LogoutUserHandler(r *iz.Request) iz.Responder {
 func (api *Api) DownloadUserData(w http.ResponseWriter, r *http.Request) {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.DownloadUserData()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -864,7 +860,6 @@ func (api *Api) CheckToken(r *iz.Request) iz.Responder {
 			Message: "Authorization header is required.",
 		})
 	}
-	logging.Logger.Infof("[TraceID=%s] | Checking Token, [Token: '%s']", traceID, token)
 
 	validToken, err := api.Service.CheckSession(ctx, token)
 	if err != nil {
@@ -884,7 +879,6 @@ func (api *Api) CheckToken(r *iz.Request) iz.Responder {
 func (api *Api) DeleteUserHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.DeleteUserHandler()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -925,7 +919,6 @@ func (api *Api) DeleteUserHandler(r *iz.Request) iz.Responder {
 func (api *Api) GetAccountInfo(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
-	logging.Logger.Infof("[TraceID=%s] | Starting Api.GetAccountInfo()", traceID)
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
