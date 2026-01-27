@@ -70,7 +70,7 @@ openapi: 3.0.0
 info:
   title: Budget Tracker API
   description: REST API for user management, transactions, and categories.
-  version: 1.0.0
+  version: 2.0.0
 
 components:
   schemas:
@@ -153,7 +153,7 @@ components:
       scheme: bearer
 
 paths:
-  /register:
+  api/register:
     post:
       summary: Register a new user
       requestBody:
@@ -197,7 +197,7 @@ paths:
                 Message: Registration completed successfully
                 Extra: eyJhb6(token)
 
-  /login:
+  api/login:
     post:
       summary: Login a user
       requestBody:
@@ -235,7 +235,7 @@ paths:
                 Message: Welcome!
                 Extra: eyJhb6(token)
 
-  /logout:
+  api/logout:
     get:
       summary: Logout the user
       security:
@@ -255,7 +255,7 @@ paths:
                     type: string
                     example: Bye!
 
-  /remove-account:
+  api/remove-account:
     post:
       summary: Remove user account
       security:
@@ -291,7 +291,7 @@ paths:
                 Code: SUCCESS
                 Message: Account deleted successfully
 
-  /download-user-data:
+  api/download-user-data:
     post:
       summary: Download user data as zip
       security:
@@ -299,7 +299,7 @@ paths:
       responses:
         "200":
           description: Zip file response.
-  /account:
+  api/account:
     get:
       summary: Get user information
       security:
@@ -325,7 +325,7 @@ paths:
                     type: string
                     example: 2025-06-28 18:19:49
 
-  /transaction:
+  api/transaction:
     post:
       summary: Create a transaction
       security:
@@ -414,7 +414,7 @@ paths:
                     items:
                       $ref: "#/components/schemas/Transaction"
 
-  /transaction/{id}:
+  api/transaction/{id}:
     get:
       summary: Get transaction by ID
       security:
@@ -436,7 +436,7 @@ paths:
                   Transaction:
                     $ref: "#/components/schemas/Transaction"
 
-  /image-process:
+  api/image-process:
     post:
       summary: Process an image for transaction extraction
       security:
@@ -469,7 +469,7 @@ paths:
                     type: string
                     example: "$, €"
 
-  /category/expense:
+  api/category/expense:
     post:
       summary: Create an expense category
       security:
@@ -581,7 +581,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ExpenseCategory"
 
-  /category/expense/{id}:
+  api/category/expense/{id}:
     delete:
       summary: Delete expense category
       security:
@@ -607,7 +607,7 @@ paths:
                     type: string
                     example: Category deleted successfully
 
-  /category/income:
+  api/category/income:
     post:
       summary: Create an income category
       security:
@@ -708,7 +708,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/IncomeCategory"
 
-  /category/income/{id}:
+  api/category/income/{id}:
     delete:
       summary: Delete income category
       security:
@@ -734,7 +734,7 @@ paths:
                     type: string
                     example: Category deleted successfully
 
-  /statistics/expense:
+  api/statistics/expense:
     get:
       summary: Get statistics of expense categories
       security:
@@ -757,7 +757,7 @@ paths:
                     type: number
                     example: 14
 
-  /statistics/income:
+  api/statistics/income:
     get:
       summary: Get statistics of income categories
       security:
@@ -780,7 +780,7 @@ paths:
                     type: number
                     example: 14
 
-  /statistics/transaction:
+  api/statistics/transaction:
     get:
       summary: Get statistics of transactions
       security:
