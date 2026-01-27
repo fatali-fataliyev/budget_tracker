@@ -1,4 +1,4 @@
-FULL_DSN=username:password@protocol(address)/dbname?param=value
+FULL_DSN=
 DB_HOST=db
 DB_PORT=3306
 DB_USER=root

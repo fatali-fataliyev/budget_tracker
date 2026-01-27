@@ -1,10 +1,12 @@
 package storage
 
+import "time"
+
 type dbSession struct {
 	ID        string
 	Token     string
-	CreatedAt string
-	ExpireAt  string
+	CreatedAt time.Time
+	ExpireAt  time.Time
 	UserID    string
 }
 

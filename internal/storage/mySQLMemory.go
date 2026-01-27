@@ -22,86 +22,87 @@ import (
 // --- INIT START --- //
 
 func Init() (*sql.DB, error) {
-	var isFullDsn bool
 	var db *sql.DB
-	var dbnameExistence string
-	var dbname string
 	var err error
+	var dbname string
 
+	username := os.Getenv("DB_USER")
+	password := os.Getenv("DB_PASS")
+	host := os.Getenv("DB_HOST")
+	port := os.Getenv("DB_PORT")
+	dbname = os.Getenv("DB_NAME")
 	fullDsn := os.Getenv("FULL_DSN")
-	if fullDsn != "" {
-		isFullDsn = true
-	}
-
-	if !isFullDsn {
-		username := os.Getenv("DB_USER")
-		password := os.Getenv("DB_PASS")
-		host := os.Getenv("DB_HOST")
-		port := os.Getenv("DB_PORT")
-		dbname = os.Getenv("DB_NAME")
-
-		if username == "" || password == "" || host == "" || port == "" {
-			return nil, fmt.Errorf("missing required DB environment variables")
-		}
-
-		logging.Logger.Info("trying to connect mysql without full DSN")
-		rootDbDsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/?parseTime=true", username, password, host, port)
-		db, err = sql.Open("mysql", rootDbDsn)
-	} else {
-		logging.Logger.Info("trying to connect mysql with full DSN")
-		db, err = sql.Open("mysql", fullDsn)
-
-		parts := strings.Split(fullDsn, "/")
-		if len(parts) > 1 {
-			dbname = strings.Split(parts[len(parts)-1], "?")[0]
-		}
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to open mysql handle: %v", err)
-	}
-
-	logging.Logger.Info("waiting for MySQL to become ready...")
-	connected := false
-	for i := range 15 {
-		if err := db.Ping(); err == nil {
-			connected = true
-			break
-		}
-		logging.Logger.Warnf("database not ready, retrying in 3s... (%d/15)", i+1)
-		time.Sleep(3 * time.Second)
-	}
-
-	if !connected {
-		return nil, fmt.Errorf("database unreachable after multiple attempts")
-	}
 
 	if dbname == "" {
 		dbname = "budget_tracker"
 	}
 
+	var adminDsn string
+	if fullDsn != "" {
+		parts := strings.Split(fullDsn, "/")
+		adminDsn = strings.Join(parts[:len(parts)-1], "/") + "/"
+	} else {
+		if username == "" || password == "" || host == "" || port == "" {
+			return nil, fmt.Errorf("missing required DB environment variables")
+		}
+		adminDsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/?parseTime=true", username, password, host, port)
+	}
+
+	logging.Logger.Info("Connecting to MySQL server for initialization...")
+	adminDb, err := sql.Open("mysql", adminDsn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open admin mysql handle: %v", err)
+	}
+	connected := false
+	for i := 0; i < 15; i++ {
+		if err := adminDb.Ping(); err == nil {
+			connected = true
+			break
+		}
+		logging.Logger.Warnf("Database not ready, retrying... (%d/15)", i+1)
+		time.Sleep(3 * time.Second)
+	}
+	if !connected {
+		return nil, fmt.Errorf("database unreachable after multiple attempts")
+	}
+
+	var dbnameExistence string
 	checkDbnameExistQuery := "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?"
-	err = db.QueryRow(checkDbnameExistQuery, dbname).Scan(&dbnameExistence)
+	err = adminDb.QueryRow(checkDbnameExistQuery, dbname).Scan(&dbnameExistence)
 
 	if err == sql.ErrNoRows {
-		logging.Logger.Infof("database '%s' does not exist, creating...", dbname)
+		logging.Logger.Infof("Database '%s' does not exist, creating...", dbname)
 		createDbSql := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;", dbname)
-		if _, err := db.Exec(createDbSql); err != nil {
+		if _, err := adminDb.Exec(createDbSql); err != nil {
+			adminDb.Close()
 			return nil, fmt.Errorf("failed to create database: %v", err)
 		}
 	} else if err != nil {
+		adminDb.Close()
 		return nil, fmt.Errorf("failed to check database existence: %v", err)
 	}
 
-	_, err = db.Exec(fmt.Sprintf("USE `%s`", dbname))
-	if err != nil {
-		return nil, fmt.Errorf("failed to switch to database %s: %v", dbname, err)
+	adminDb.Close()
+
+	var finalDsn string
+	if fullDsn != "" {
+		finalDsn = fullDsn
+	} else {
+		finalDsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", username, password, host, port, dbname)
 	}
 
-	_, _ = db.Exec("SET GLOBAL time_zone = '+00:00'")
+	logging.Logger.Info("Connecting to database...")
+	db, err = sql.Open("mysql", finalDsn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database handle: %v", err)
+	}
 
-	logging.Logger.Info("connected to database successfully")
-	logging.Logger.Info("running migrations...")
+	if _, err := db.Exec("SET GLOBAL time_zone = '+00:00'"); err != nil {
+		logging.Logger.Warn("failed to set database timezone(UTC+0)")
+	}
+
+	logging.Logger.Info("Connected to database successfully")
+	logging.Logger.Info("Running migrations...")
 
 	if err := runMigrations(db); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %v", err)
@@ -344,17 +345,17 @@ func (mySql *MySQLStorage) UpdateSession(ctx context.Context, userId string, new
 }
 
 func (mySql *MySQLStorage) GetSessionByToken(ctx context.Context, token string) (auth.Session, error) {
-	traceID := contextutil.TraceIDFromContext(ctx)
-
 	query := `SELECT id, token, created_at, expire_at, user_id FROM session WHERE token = ?`
-	var dbSession dbSession
+	var dbS dbSession
+
 	err := mySql.db.QueryRow(query, token).Scan(
-		&dbSession.ID,
-		&dbSession.Token,
-		&dbSession.CreatedAt,
-		&dbSession.ExpireAt,
-		&dbSession.UserID,
+		&dbS.ID,
+		&dbS.Token,
+		&dbS.CreatedAt,
+		&dbS.ExpireAt,
+		&dbS.UserID,
 	)
+
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return auth.Session{}, appErrors.ErrorResponse{
@@ -362,50 +363,26 @@ func (mySql *MySQLStorage) GetSessionByToken(ctx context.Context, token string) 
 				Message: "Session does not exist, please login.",
 			}
 		}
-
-		logging.Logger.Errorf("[TraceID=%s] | failed to get session by token in Storage.GetSessionByToken() function | Error: %v", traceID, err)
-		return auth.Session{}, appErrors.ErrorResponse{
-			Code:    appErrors.ErrInternal,
-			Message: "Failed to check session, please try again later.",
-		}
+		return auth.Session{}, err
 	}
 
-	createdAt, err := time.Parse("2006-01-02 15:04:05", dbSession.CreatedAt)
-	if err != nil {
-		logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at row in Storage.GetSessionByToken() function | Error: %v", traceID, err)
-		return auth.Session{}, appErrors.ErrorResponse{
-			Code:    appErrors.ErrInternal,
-			Message: "Failed to check session, please try again later.",
-		}
-	}
-	expireAt, err := time.Parse("2006-01-02 15:04:05", dbSession.ExpireAt)
-	if err != nil {
-		logging.Logger.Errorf("[TraceID=%s] | failed to parse updated_at row in Storage.GetSessionByToken() function | Error: %v", traceID, err)
-		return auth.Session{}, appErrors.ErrorResponse{
-			Code:    appErrors.ErrInternal,
-			Message: "Failed to check session, please try again later.",
-		}
-	}
-
-	session := auth.Session{
-		ID:        dbSession.ID,
-		Token:     dbSession.Token,
-		CreatedAt: createdAt,
-		ExpireAt:  expireAt,
-		UserID:    dbSession.UserID,
-	}
-
-	return session, nil
+	return auth.Session{
+		ID:        dbS.ID,
+		Token:     dbS.Token,
+		CreatedAt: dbS.CreatedAt,
+		ExpireAt:  dbS.ExpireAt,
+		UserID:    dbS.UserID,
+	}, nil
 }
 
 func (mySql *MySQLStorage) CheckSession(ctx context.Context, token string) (string, error) {
 	query := `SELECT user_id, expire_at FROM session WHERE token = ?`
 
 	var userID string
-	var expireAtString string
+	var expireAt time.Time
 	traceID := contextutil.TraceIDFromContext(ctx)
 
-	err := mySql.db.QueryRow(query, token).Scan(&userID, &expireAtString)
+	err := mySql.db.QueryRow(query, token).Scan(&userID, &expireAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", appErrors.ErrorResponse{
@@ -414,15 +391,6 @@ func (mySql *MySQLStorage) CheckSession(ctx context.Context, token string) (stri
 			}
 		}
 		logging.Logger.Errorf("[TraceID=%s] | failed to check session existance in Storage.CheckSession() function | Error: %v", traceID, err)
-		return "", appErrors.ErrorResponse{
-			Code:    appErrors.ErrInternal,
-			Message: "Failed to check session, please try again later.",
-		}
-	}
-
-	expireAt, err := time.Parse("2006-01-02 15:04:05", expireAtString)
-	if err != nil {
-		logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at row in Storage.CheckSession() function | Error: %v", traceID, err)
 		return "", appErrors.ErrorResponse{
 			Code:    appErrors.ErrInternal,
 			Message: "Failed to check session, please try again later.",
@@ -579,30 +547,10 @@ func (mySql *MySQLStorage) processIncomeRows(ctx context.Context, rows *sql.Rows
 
 	for rows.Next() {
 		var category budget.IncomeCategoryResponse
-		var createdAtStr string
-		var updatedAtStr string
 
-		err := rows.Scan(&category.ID, &category.Name, &category.TargetAmount, &createdAtStr, &updatedAtStr, &category.Note, &category.CreatedBy)
+		err := rows.Scan(&category.ID, &category.Name, &category.TargetAmount, &category.CreatedAt, &category.UpdatedAt, &category.Note, &category.CreatedBy)
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.processIncomeRows() function | Error : %v", traceID, err)
-			return nil, appErrors.ErrorResponse{
-				Code:    appErrors.ErrInternal,
-				Message: "Failed to get categories, try again later.",
-			}
-		}
-
-		category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAtStr)
-		if err != nil {
-			logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at in Storage.processIncomeRows() function | Error : %v", traceID, err)
-			return nil, appErrors.ErrorResponse{
-				Code:    appErrors.ErrInternal,
-				Message: "Failed to get categories, try again later.",
-			}
-		}
-
-		category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAtStr)
-		if err != nil {
-			logging.Logger.Errorf("[TraceID=%s] | failed to parse updated_at in Storage.processIncomeRows() function | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
 				Code:    appErrors.ErrInternal,
 				Message: "Failed to get categories, try again later.",
@@ -705,30 +653,10 @@ func (mySql *MySQLStorage) processExpenseRows(ctx context.Context, rows *sql.Row
 
 	for rows.Next() {
 		var category budget.ExpenseCategoryResponse
-		var createdAtStr string
-		var updatedAtStr string
 
-		err := rows.Scan(&category.ID, &category.Name, &category.MaxAmount, &category.PeriodDay, &createdAtStr, &updatedAtStr, &category.Note, &category.CreatedBy)
+		err := rows.Scan(&category.ID, &category.Name, &category.MaxAmount, &category.PeriodDay, &category.CreatedAt, &category.UpdatedAt, &category.Note, &category.CreatedBy)
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.processExpenseRows() function | Error : %v", traceID, err)
-			return nil, appErrors.ErrorResponse{
-				Code:    appErrors.ErrInternal,
-				Message: "Failed to get categories, try again later.",
-			}
-		}
-
-		category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAtStr)
-		if err != nil {
-			logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at in Storage.processExpenseRows() function | Error : %v", traceID, err)
-			return nil, appErrors.ErrorResponse{
-				Code:    appErrors.ErrInternal,
-				Message: "Failed to get categories, try again later.",
-			}
-		}
-
-		category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAtStr)
-		if err != nil {
-			logging.Logger.Errorf("[TraceID=%s] | failed to parse updated_at in Storage.processExpenseRows() function | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
 				Code:    appErrors.ErrInternal,
 				Message: "Failed to get categories, try again later.",
@@ -1003,29 +931,10 @@ func (mySql *MySQLStorage) UpdateExpenseCategory(ctx context.Context, userID str
 	row := mySql.db.QueryRow(query, userID, filters.ID)
 
 	var category budget.ExpenseCategoryResponse
-	var createdAt string
-	var updatedAt string
 
-	err = row.Scan(&category.ID, &category.Name, &category.MaxAmount, &category.PeriodDay, &createdAt, &updatedAt, &category.Note, &category.CreatedBy)
+	err = row.Scan(&category.ID, &category.Name, &category.MaxAmount, &category.PeriodDay, &category.CreatedAt, &category.UpdatedAt, &category.Note, &category.CreatedBy)
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.UpdateExpenseCategory() function | Error : %v", traceID, err)
-		return nil, appErrors.ErrorResponse{
-			Code:    appErrors.ErrInternal,
-			Message: "Failed to update the category.",
-		}
-	}
-
-	category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
-	if err != nil {
-		logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at field in Storage.UpdateExpenseCategory() function | Error : %v", traceID, err)
-		return nil, appErrors.ErrorResponse{
-			Code:    appErrors.ErrInternal,
-			Message: "Failed to update the category.",
-		}
-	}
-	category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
-	if err != nil {
-		logging.Logger.Errorf("[TraceID=%s] | failed to parse updated_at field in Storage.UpdateExpenseCategory() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
 			Code:    appErrors.ErrInternal,
 			Message: "Failed to update the category.",
@@ -1058,35 +967,14 @@ func (mySql *MySQLStorage) UpdateIncomeCategory(ctx context.Context, userID stri
 	row := mySql.db.QueryRow(query, userID, filters.ID)
 
 	var category budget.IncomeCategoryResponse
-	var createdAt string
-	var updatedAt string
 
-	err = row.Scan(&category.ID, &category.Name, &category.TargetAmount, &createdAt, &updatedAt, &category.Note, &category.CreatedBy)
+	err = row.Scan(&category.ID, &category.Name, &category.TargetAmount, &category.CreatedAt, &category.UpdatedAt, &category.Note, &category.CreatedBy)
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.UpdateIncomeCategory() function | Error : %v", traceID, err)
 		return nil, appErrors.ErrorResponse{
 			Code:    appErrors.ErrInternal,
 			Message: "Failed to update the category.",
 		}
-	}
-
-	category.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
-	if err != nil {
-		logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at field in Storage.UpdateIncomeCategory() function | Error : %v", traceID, err)
-		return nil, appErrors.ErrorResponse{
-			Code:    appErrors.ErrInternal,
-			Message: "Failed to update the category.",
-		}
-	}
-
-	category.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAt)
-	if err != nil {
-		logging.Logger.Errorf("[TraceID=%s] | failed to parse updated_at field in Storage.UpdateIncomeCategory() function | Error : %v", traceID, err)
-		return nil, appErrors.ErrorResponse{
-			Code:    appErrors.ErrInternal,
-			Message: "Failed to update the category.",
-		}
-
 	}
 
 	categoryAmount, err := mySql.GetTotalAmountOfTransactions(ctx, userID, category.Name, "+")
@@ -1279,9 +1167,8 @@ func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql
 
 	for rows.Next() {
 		var transaction budget.Transaction
-		var createdAt string
 
-		err := rows.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &createdAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
+		err := rows.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &transaction.CreatedAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.processTransactionRows() | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
@@ -1289,16 +1176,6 @@ func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql
 				Message: "Failed to process transactions, try again later.",
 			}
 		}
-
-		transaction.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
-		if err != nil {
-			logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at in Storage.processTransactionRows() | Error : %v", traceID, err)
-			return nil, appErrors.ErrorResponse{
-				Code:    appErrors.ErrInternal,
-				Message: "Failed to process transactions, try again later.",
-			}
-		}
-
 		transactions = append(transactions, transaction)
 	}
 
@@ -1315,7 +1192,7 @@ func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql
 
 func (mySql *MySQLStorage) GetFilteredTransactions(ctx context.Context, userID string, filters *budget.TransactionList) ([]budget.Transaction, error) {
 	traceID := contextutil.TraceIDFromContext(ctx)
-	query := "SELECT id, category_name, amount, currency, created_at, note, created_by, category_type FROM transaction WHERE created_by = ?"
+	query := "SELECT id, amount, currency, created_at, note, created_by, category_type FROM transaction WHERE created_by = ?"
 	args := []interface{}{userID}
 
 	if filters.IsAllNil {
@@ -1388,8 +1265,7 @@ func (mySql *MySQLStorage) GetTransactionById(ctx context.Context, userID string
 	query := "SELECT id, category_name, amount, currency, created_at, note, created_by, category_type FROM transaction WHERE created_by = ? AND id = ?;"
 	row := mySql.db.QueryRow(query, userID, transactionId)
 	var transaction budget.Transaction
-	var createdAt string
-	err := row.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &createdAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
+	err := row.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &transaction.CreatedAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return budget.Transaction{}, appErrors.ErrorResponse{
@@ -1405,7 +1281,6 @@ func (mySql *MySQLStorage) GetTransactionById(ctx context.Context, userID string
 		}
 	}
 
-	transaction.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 	if err != nil {
 		logging.Logger.Errorf("[TraceID=%s] | failed to parse created_at field in Storage.GetTransactionById() function | Error : %v", traceID, err)
 		return budget.Transaction{}, appErrors.ErrorResponse{

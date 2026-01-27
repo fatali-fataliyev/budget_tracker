@@ -48,41 +48,41 @@ func main() {
 	api := api.NewApi(&bt)
 
 	// USER ENDPOINTS.
-	server.HandleFunc("POST /register", iz.Bind(api.SaveUserHandler))         // Create User
-	server.HandleFunc("POST /login", iz.Bind(api.LoginUserHandler))           // Login User
-	server.HandleFunc("GET /logout", iz.Bind(api.LogoutUserHandler))          // Logout User
-	server.HandleFunc("POST /remove-account", iz.Bind(api.DeleteUserHandler)) // Remove User
-	server.HandleFunc("GET /download-user-data", api.DownloadUserData)        // Download User Data
-	server.HandleFunc("GET /check-token", iz.Bind(api.CheckToken))            // Check User Token
-	server.HandleFunc("GET /account", iz.Bind(api.GetAccountInfo))            // Account Info
+	server.HandleFunc("POST /api/register", iz.Bind(api.SaveUserHandler))         // Create User
+	server.HandleFunc("POST /api/login", iz.Bind(api.LoginUserHandler))           // Login User
+	server.HandleFunc("GET /api/logout", iz.Bind(api.LogoutUserHandler))          // Logout User
+	server.HandleFunc("POST /api/remove-account", iz.Bind(api.DeleteUserHandler)) // Remove User
+	server.HandleFunc("GET /api/download-user-data", api.DownloadUserData)        // Download User Data
+	server.HandleFunc("GET /api/check-token", iz.Bind(api.CheckToken))            // Check User Token
+	server.HandleFunc("GET /api/account", iz.Bind(api.GetAccountInfo))            // Account Info
 
 	// TRANSACTION ENDPOINTS.
-	server.HandleFunc("POST /transaction", iz.Bind(api.SaveTransactionHandler))        // Create Transaction
-	server.HandleFunc("GET /transaction", iz.Bind(api.GetFilteredTransactionsHandler)) // Get Transactions with filters
-	server.HandleFunc("GET /transaction/{id}", iz.Bind(api.GetTransactionByIdHandler)) // Get Transation by ID
-	server.Handle("POST /image-process", iz.Bind(api.ProcessImageHandler))             // Take image from user, and returns possible transaction fields
+	server.HandleFunc("POST /api/transaction", iz.Bind(api.SaveTransactionHandler))        // Create Transaction
+	server.HandleFunc("GET /api/transaction", iz.Bind(api.GetFilteredTransactionsHandler)) // Get Transactions with filters
+	server.HandleFunc("GET /api/transaction/{id}", iz.Bind(api.GetTransactionByIdHandler)) // Get Transation by ID
+	server.Handle("POST /api/image-process", iz.Bind(api.ProcessImageHandler))             // Take image from user, and returns possible transaction fields
 
 	// EXPENSE CATEGORY ENDPOINTS.
-	server.HandleFunc("POST /category/expense", iz.Bind(api.SaveExpenseCategoryHandler))          // Create Expense Category
-	server.HandleFunc("GET /category/expense", iz.Bind(api.GetFilteredExpenseCategoriesHandler))  // Get Expense Categories with filters
-	server.HandleFunc("PUT /category/expense", iz.Bind(api.UpdateExpenseCategoryHandler))         // Update Expense Category
-	server.HandleFunc("DELETE /category/expense/{id}", iz.Bind(api.DeleteExpenseCategoryHandler)) // Delete Expense Category
+	server.HandleFunc("POST /api/category/expense", iz.Bind(api.SaveExpenseCategoryHandler))          // Create Expense Category
+	server.HandleFunc("GET /api/category/expense", iz.Bind(api.GetFilteredExpenseCategoriesHandler))  // Get Expense Categories with filters
+	server.HandleFunc("PUT /api/category/expense", iz.Bind(api.UpdateExpenseCategoryHandler))         // Update Expense Category
+	server.HandleFunc("DELETE /api/category/expense/{id}", iz.Bind(api.DeleteExpenseCategoryHandler)) // Delete Expense Category
 
 	// INCOME CATEGORY ENDPOINTS.
-	server.HandleFunc("POST /category/income", iz.Bind(api.SaveIncomeCategoryHandler))          // Create Income Category
-	server.HandleFunc("GET /category/income", iz.Bind(api.GetFilteredIncomeCategoriesHandler))  // Get Income Categories with filters
-	server.HandleFunc("PUT /category/income", iz.Bind(api.UpdateIncomeCategoryHandler))         // Update Income Category
-	server.HandleFunc("DELETE /category/income/{id}", iz.Bind(api.DeleteIncomeCategoryHandler)) // Delete Income Category
+	server.HandleFunc("POST /api/category/income", iz.Bind(api.SaveIncomeCategoryHandler))          // Create Income Category
+	server.HandleFunc("GET /api/category/income", iz.Bind(api.GetFilteredIncomeCategoriesHandler))  // Get Income Categories with filters
+	server.HandleFunc("PUT /api/category/income", iz.Bind(api.UpdateIncomeCategoryHandler))         // Update Income Category
+	server.HandleFunc("DELETE /api/category/income/{id}", iz.Bind(api.DeleteIncomeCategoryHandler)) // Delete Income Category
 
 	// STATISTICS ENDPOINTS.
-	server.HandleFunc("GET /statistics/expense", iz.Bind(api.GetExpenseCategoryStatsHandler)) // Get Statistics of expense categories
-	server.HandleFunc("GET /statistics/income", iz.Bind(api.GetIncomeCategoryStatsHandler))   // Get Statistics of income categories
-	server.HandleFunc("GET /statistics/transaction", iz.Bind(api.GetTransactionStatsHandler)) // Get Statistics of transactions
+	server.HandleFunc("GET /api/statistics/expense", iz.Bind(api.GetExpenseCategoryStatsHandler)) // Get Statistics of expense categories
+	server.HandleFunc("GET /api/statistics/income", iz.Bind(api.GetIncomeCategoryStatsHandler))   // Get Statistics of income categories
+	server.HandleFunc("GET /api/statistics/transaction", iz.Bind(api.GetTransactionStatsHandler)) // Get Statistics of transactions
 
 	port := os.Getenv("APP_PORT")
 	if port == "" {
 		logging.Logger.Info("APP_PORT environment variable not set, using default port 8060")
-		port = "8060"
+		port = "8080"
 	}
 	fmt.Println("Starting server on port: ", port)
 	handlerwithCors := corsConf.Handler(server)

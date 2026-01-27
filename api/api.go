@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/0xcafe-io/iz"
 	appErrors "github.com/fatali-fataliyev/budget_tracker/customErrors"
@@ -324,6 +325,8 @@ func (api *Api) GetExpenseCategoryStatsHandler(r *iz.Request) iz.Responder {
 		})
 	}
 
+	token = strings.TrimSpace(token)
+	token = strings.TrimPrefix(token, "Bearer ")
 	userId, err := api.Service.CheckSession(ctx, token)
 	if err != nil {
 		return RespondError(err)

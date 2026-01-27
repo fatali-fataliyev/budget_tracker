@@ -330,6 +330,7 @@ func (bt *BudgetTracker) ProcessImage(ctx context.Context, imageRawText string) 
 		num, err := strconv.ParseFloat(amount, 64)
 		if err == nil {
 			result.Amounts = append(result.Amounts, num)
+			continue
 		}
 		logging.Logger.Warnf("[TraceID=%s] | failed to convert string number to float64 from Service.ProcessImage() function, Error: %v", traceID, err)
 	}
