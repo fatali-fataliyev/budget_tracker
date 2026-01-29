@@ -80,7 +80,6 @@ func (m *MockStorage) GetFilteredTransactions(ctx context.Context, userID string
 	transactions := []Transaction{
 		{
 			ID:           "ts-1",
-			CategoryName: "salary",
 			CategoryType: "+",
 			Amount:       30.45,
 			Currency:     "USD",
@@ -132,7 +131,6 @@ func (m *MockStorage) GetFilteredIncomeCategories(ctx context.Context, userID st
 func (m *MockStorage) GetTransactionById(ctx context.Context, userID string, transacationID string) (Transaction, error) {
 	transaction := Transaction{
 		ID:           "ts-1",
-		CategoryName: "salary",
 		CategoryType: "+",
 		Amount:       1500,
 		Currency:     "USD",
@@ -593,7 +591,6 @@ func TestSaveTransaction(t *testing.T) {
 		{
 			name: "Fail - Empty name",
 			input: TransactionRequest{
-				CategoryName: "",
 				CategoryType: "-",
 				Amount:       30.33,
 				Currency:     "USD",
@@ -604,7 +601,6 @@ func TestSaveTransaction(t *testing.T) {
 		{
 			name: "Fail - Zero Amount with decimal",
 			input: TransactionRequest{
-				CategoryName: "Salary",
 				CategoryType: "-",
 				Amount:       0.0,
 				Currency:     "USD",
@@ -615,7 +611,6 @@ func TestSaveTransaction(t *testing.T) {
 		{
 			name: "Fail - Zero Amount",
 			input: TransactionRequest{
-				CategoryName: "Salary",
 				CategoryType: "-",
 				Amount:       0,
 				Currency:     "USD",
@@ -626,7 +621,6 @@ func TestSaveTransaction(t *testing.T) {
 		{
 			name: "Fail - Maximum Amount",
 			input: TransactionRequest{
-				CategoryName: "Salary",
 				CategoryType: "-",
 				Amount:       math.MaxUint64,
 				Currency:     "USD",
@@ -637,7 +631,6 @@ func TestSaveTransaction(t *testing.T) {
 		{
 			name: "Fail - Long category name",
 			input: TransactionRequest{
-				CategoryName: strings.Repeat("A", 256),
 				CategoryType: "-",
 				Amount:       3000,
 				Currency:     "USD",
@@ -648,7 +641,6 @@ func TestSaveTransaction(t *testing.T) {
 		{
 			name: "Fail - Long Currency name",
 			input: TransactionRequest{
-				CategoryName: "Salary",
 				CategoryType: "-",
 				Amount:       3000,
 				Currency:     strings.Repeat("A", 256),
@@ -659,7 +651,6 @@ func TestSaveTransaction(t *testing.T) {
 		{
 			name: "Fail - Long Note",
 			input: TransactionRequest{
-				CategoryName: "Salary",
 				CategoryType: "-",
 				Amount:       3000,
 				Currency:     "USD",
@@ -670,7 +661,6 @@ func TestSaveTransaction(t *testing.T) {
 		{
 			name: "Success - Valid transaction",
 			input: TransactionRequest{
-				CategoryName: "Salary",
 				CategoryType: "+",
 				Amount:       3000,
 				Currency:     "USD",

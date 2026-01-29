@@ -408,14 +408,14 @@ func (mySql *MySQLStorage) CheckSession(ctx context.Context, token string) (stri
 	return userID, nil
 }
 
-func (mySql *MySQLStorage) isCategoryExists(traceID string, categoryName string, categoryType string) (bool, string, error) {
+func (mySql *MySQLStorage) isCategoryExists(traceID string, categoryId string, categoryType string) (bool, string, error) {
 	switch categoryType {
 	case "+":
-		incomeQuery := "SELECT name FROM income_category WHERE name = ?;"
+		incomeQuery := "SELECT id FROM income_category WHERE id = ?;"
 
-		var incomeCategoryName string
-		row := mySql.db.QueryRow(incomeQuery, categoryName)
-		err := row.Scan(&incomeCategoryName)
+		var incomeCategoryId string
+		row := mySql.db.QueryRow(incomeQuery, categoryId)
+		err := row.Scan(&incomeCategoryId)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return false, "+", nil
@@ -428,16 +428,15 @@ func (mySql *MySQLStorage) isCategoryExists(traceID string, categoryName string,
 			}
 		}
 
-		incomeCategoryName = strings.ToLower(incomeCategoryName)
-		if incomeCategoryName != "" && incomeCategoryName == strings.ToLower(categoryName) {
+		if incomeCategoryId != "" && incomeCategoryId == categoryId {
 			return true, "+", nil
 		}
 	case "-":
-		expenseQuery := "SELECT name FROM expense_category WHERE name = ?;"
+		expenseQuery := "SELECT id FROM expense_category WHERE id = ?;"
 
-		var expenseCategoryName string
-		row := mySql.db.QueryRow(expenseQuery, categoryName)
-		err := row.Scan(&expenseCategoryName)
+		var expenseCategoryId string
+		row := mySql.db.QueryRow(expenseQuery, categoryId)
+		err := row.Scan(&expenseCategoryId)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return false, "-", nil
@@ -450,8 +449,7 @@ func (mySql *MySQLStorage) isCategoryExists(traceID string, categoryName string,
 			}
 		}
 
-		expenseCategoryName = strings.ToLower(expenseCategoryName)
-		if expenseCategoryName != "" && expenseCategoryName == strings.ToLower(categoryName) {
+		if expenseCategoryId != "" && expenseCategoryId == categoryId {
 			return true, "-", nil
 		}
 	}
@@ -463,15 +461,15 @@ func (mySql *MySQLStorage) isCategoryExists(traceID string, categoryName string,
 
 func (mySql *MySQLStorage) SaveTransaction(ctx context.Context, t budget.Transaction) error {
 	traceID := contextutil.TraceIDFromContext(ctx)
-	isExist, cType, err := mySql.isCategoryExists(traceID, t.CategoryName, t.CategoryType)
+	isExist, cType, err := mySql.isCategoryExists(traceID, t.CategoryId, t.CategoryType)
 	if err != nil {
 		return err
 	}
 
 	if isExist {
 		if cType != "" {
-			query := "INSERT INTO transaction (id, category_name, amount, currency, created_at, note, created_by, category_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
-			_, err := mySql.db.Exec(query, t.ID, t.CategoryName, t.Amount, t.Currency, t.CreatedAt, t.Note, t.CreatedBy, cType)
+			query := "INSERT INTO transaction (id, category_id, amount, currency, created_at, note, created_by, category_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
+			_, err := mySql.db.Exec(query, t.ID, t.CategoryId, t.Amount, t.Currency, t.CreatedAt, t.Note, t.CreatedBy, cType)
 			if err != nil {
 				logging.Logger.Errorf("[TraceID=%s] | failed to save transaction in Storage.SaveTransaction() function, | Error: %v", traceID, err)
 				return appErrors.ErrorResponse{
@@ -508,7 +506,7 @@ func NilToNullString(v *string) sql.NullString {
 	return sql.NullString{Valid: true, String: *v}
 }
 
-func (mySql *MySQLStorage) GetTotalAmountOfTransactions(ctx context.Context, userID string, categoryName string, categoryType string) (float64, error) {
+func (mySql *MySQLStorage) GetTotalAmountOfTransactions(ctx context.Context, userID string, categoryId string, categoryType string) (float64, error) {
 	traceID := contextutil.TraceIDFromContext(ctx)
 	query := `
 		SELECT IFNULL(SUM(amount), 0)
@@ -516,9 +514,9 @@ func (mySql *MySQLStorage) GetTotalAmountOfTransactions(ctx context.Context, use
 		WHERE created_by = ?
 	`
 	args := []interface{}{userID}
-	if categoryName != "" {
-		query += " AND category_name = ?"
-		args = append(args, categoryName)
+	if categoryId != "" {
+		query += " AND category_id = ?"
+		args = append(args, categoryId)
 	}
 
 	if categoryType != "" {
@@ -557,7 +555,7 @@ func (mySql *MySQLStorage) processIncomeRows(ctx context.Context, rows *sql.Rows
 			}
 		}
 
-		categoryAmount, err := mySql.GetTotalAmountOfTransactions(ctx, userID, category.Name, "+")
+		categoryAmount, err := mySql.GetTotalAmountOfTransactions(ctx, userID, category.ID, "+")
 		if err != nil {
 			return nil, err
 		}
@@ -663,7 +661,7 @@ func (mySql *MySQLStorage) processExpenseRows(ctx context.Context, rows *sql.Row
 			}
 		}
 
-		categoryAmount, err := mySql.GetTotalAmountOfTransactions(ctx, userID, category.Name, "-")
+		categoryAmount, err := mySql.GetTotalAmountOfTransactions(ctx, userID, category.ID, "-")
 		if err != nil {
 			return nil, err
 		}
@@ -941,7 +939,7 @@ func (mySql *MySQLStorage) UpdateExpenseCategory(ctx context.Context, userID str
 		}
 	}
 
-	categoryAmount, err := mySql.GetTotalAmountOfTransactions(ctx, userID, category.Name, "-")
+	categoryAmount, err := mySql.GetTotalAmountOfTransactions(ctx, userID, category.ID, "-")
 	if err != nil {
 		return nil, err
 	}
@@ -977,7 +975,7 @@ func (mySql *MySQLStorage) UpdateIncomeCategory(ctx context.Context, userID stri
 		}
 	}
 
-	categoryAmount, err := mySql.GetTotalAmountOfTransactions(ctx, userID, category.Name, "+")
+	categoryAmount, err := mySql.GetTotalAmountOfTransactions(ctx, userID, category.ID, "+")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get total amount of transactions: %w", err)
 	}
@@ -998,14 +996,8 @@ func (mySql *MySQLStorage) DeleteExpenseCategory(ctx context.Context, userId str
 		}
 	}
 
-	categoryName, err := mySql.getCategoryNameById(traceID, userId, categoryId, "-")
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	deleteTxQuery := "DELETE FROM transaction WHERE created_by = ? AND category_name = ? AND category_type = '-';"
-	_, err = tx.Exec(deleteTxQuery, userId, categoryName)
+	deleteTxQuery := "DELETE FROM transaction WHERE created_by = ? AND category_id = ? AND category_type = '-';"
+	_, err = tx.Exec(deleteTxQuery, userId, categoryId)
 	if err != nil {
 		tx.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] |  failed to delete all related transactions in Storage.DeleteExpenseCategory() function | Error : %v", traceID, err)
@@ -1072,8 +1064,8 @@ func (mySql *MySQLStorage) getCategoryNameById(traceID string, userID string, ca
 
 	row := mySql.db.QueryRow(query, userID, categoryId)
 	var name string
-	err := row.Scan(&name)
-	if err != nil {
+
+	if err := row.Scan(&name); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, appErrors.ErrorResponse{
 				Code:    appErrors.ErrInvalidInput,
@@ -1090,6 +1082,40 @@ func (mySql *MySQLStorage) getCategoryNameById(traceID string, userID string, ca
 	return &name, nil
 }
 
+func (mySql *MySQLStorage) getCategoryIdByName(traceID string, userID string, categoryName string, categoryType string) (*string, error) {
+	var query string
+
+	switch categoryType {
+	case "-":
+		query = "SELECT id FROM expense_category WHERE created_by = ? AND name = ?;"
+	case "+":
+		query = "SELECT id FROM income_category WHERE created_by = ? AND name = ?;"
+	default:
+		return nil, appErrors.ErrorResponse{
+			Code:    appErrors.ErrInvalidInput,
+			Message: "Invalid category type.",
+		}
+	}
+
+	row := mySql.db.QueryRow(query, userID, categoryName)
+	var id string
+	if err := row.Scan(&id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, appErrors.ErrorResponse{
+				Code:    appErrors.ErrInvalidInput,
+				Message: "The category does not exists.",
+			}
+		}
+		logging.Logger.Errorf("[TraceID=%s] | failed to get category ID by name from Storage.getCategoryNameById() function | Error : %v", traceID, err)
+		return nil, appErrors.ErrorResponse{
+			Code:    appErrors.ErrInternal,
+			Message: "Failed to get category name.",
+		}
+	}
+
+	return &id, nil
+}
+
 func (mySql *MySQLStorage) DeleteIncomeCategory(ctx context.Context, userId string, categoryId string) error {
 	tx, err := mySql.db.Begin()
 	traceID := contextutil.TraceIDFromContext(ctx)
@@ -1102,14 +1128,8 @@ func (mySql *MySQLStorage) DeleteIncomeCategory(ctx context.Context, userId stri
 		}
 	}
 
-	categoryName, err := mySql.getCategoryNameById(traceID, userId, categoryId, "+")
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	deleteTxQuery := "DELETE FROM transaction WHERE created_by = ? AND category_name = ? AND category_type = '+';"
-	_, err = tx.Exec(deleteTxQuery, userId, categoryName)
+	deleteTxQuery := "DELETE FROM transaction WHERE created_by = ? AND category_id = ? AND category_type = '+';"
+	_, err = tx.Exec(deleteTxQuery, userId, categoryId)
 	if err != nil {
 		tx.Rollback()
 		logging.Logger.Errorf("[TraceID=%s] |  failed to delete all related transactions in Storage.DeleteIncomeCategory() function | Error : %v", traceID, err)
@@ -1159,16 +1179,16 @@ func (mySql *MySQLStorage) DeleteIncomeCategory(ctx context.Context, userId stri
 	return nil
 }
 
-func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql.Rows) ([]budget.Transaction, error) {
+func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql.Rows, userId string) ([]budget.Transaction, error) {
 	traceID := contextutil.TraceIDFromContext(ctx)
-	defer rows.Close()
 
 	var transactions []budget.Transaction
 
+	defer rows.Close()
 	for rows.Next() {
 		var transaction budget.Transaction
 
-		err := rows.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &transaction.CreatedAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
+		err := rows.Scan(&transaction.ID, &transaction.CategoryId, &transaction.CategoryType, &transaction.Amount, &transaction.Currency, &transaction.CreatedAt, &transaction.Note, &transaction.CreatedBy)
 		if err != nil {
 			logging.Logger.Errorf("[TraceID=%s] | failed to scan row in Storage.processTransactionRows() | Error : %v", traceID, err)
 			return nil, appErrors.ErrorResponse{
@@ -1176,6 +1196,12 @@ func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql
 				Message: "Failed to process transactions, try again later.",
 			}
 		}
+
+		categoryName, err := mySql.getCategoryNameById(traceID, userId, transaction.CategoryId, transaction.CategoryType)
+		if err != nil {
+			logging.Logger.Errorf("[TraceID=%s] | failed to get Category name by Category ID Storage.processTransactionRows() | Error : %v", traceID, err)
+		}
+		transaction.CategoryName = *categoryName
 		transactions = append(transactions, transaction)
 	}
 
@@ -1192,7 +1218,7 @@ func (mySql *MySQLStorage) processTransactionRows(ctx context.Context, rows *sql
 
 func (mySql *MySQLStorage) GetFilteredTransactions(ctx context.Context, userID string, filters *budget.TransactionList) ([]budget.Transaction, error) {
 	traceID := contextutil.TraceIDFromContext(ctx)
-	query := "SELECT id, amount, currency, created_at, note, created_by, category_type FROM transaction WHERE created_by = ?"
+	query := "SELECT id, category_id, category_type, amount, currency, created_at, note, created_by FROM transaction WHERE created_by = ?"
 	args := []interface{}{userID}
 
 	if filters.IsAllNil {
@@ -1206,7 +1232,7 @@ func (mySql *MySQLStorage) GetFilteredTransactions(ctx context.Context, userID s
 			}
 		}
 
-		transactions, err := mySql.processTransactionRows(ctx, rows)
+		transactions, err := mySql.processTransactionRows(ctx, rows, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -1215,9 +1241,19 @@ func (mySql *MySQLStorage) GetFilteredTransactions(ctx context.Context, userID s
 	}
 
 	if len(filters.CategoryNames) > 0 {
-		query += " AND category_name IN (?" + strings.Repeat(",?", len(filters.CategoryNames)-1) + ")"
+		categoryIds := make([]string, 0, len(filters.CategoryNames))
+
 		for _, name := range filters.CategoryNames {
-			args = append(args, name)
+			id, err := mySql.getCategoryIdByName(traceID, userID, name, filters.Type)
+			if err != nil {
+				logging.Logger.Errorf("[TraceID=%s] | failed to get category ID by Name  Storage.GetFilteredTransactions() function | Error : %v", traceID, err)
+			}
+			categoryIds = append(categoryIds, *id)
+		}
+
+		query += " AND category_id IN (?" + strings.Repeat(",?", len(categoryIds)-1) + ")"
+		for _, id := range categoryIds {
+			args = append(args, id)
 		}
 	}
 
@@ -1251,7 +1287,7 @@ func (mySql *MySQLStorage) GetFilteredTransactions(ctx context.Context, userID s
 		}
 	}
 
-	transactions, err := mySql.processTransactionRows(ctx, rows)
+	transactions, err := mySql.processTransactionRows(ctx, rows, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1265,7 +1301,7 @@ func (mySql *MySQLStorage) GetTransactionById(ctx context.Context, userID string
 	query := "SELECT id, category_name, amount, currency, created_at, note, created_by, category_type FROM transaction WHERE created_by = ? AND id = ?;"
 	row := mySql.db.QueryRow(query, userID, transactionId)
 	var transaction budget.Transaction
-	err := row.Scan(&transaction.ID, &transaction.CategoryName, &transaction.Amount, &transaction.Currency, &transaction.CreatedAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
+	err := row.Scan(&transaction.ID, &transaction.ID, &transaction.Amount, &transaction.Currency, &transaction.CreatedAt, &transaction.Note, &transaction.CreatedBy, &transaction.CategoryType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return budget.Transaction{}, appErrors.ErrorResponse{

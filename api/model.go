@@ -14,7 +14,7 @@ import (
 
 // REQUESTS START:
 type CreateTransactionRequest struct {
-	CategoryName string  `json:"category_name"`
+	CategoryId   string  `json:"category_id"`
 	CategoryType string  `json:"category_type"`
 	Amount       float64 `json:"amount"`
 	Currency     string  `json:"currency"`
@@ -77,6 +77,7 @@ type OperationResponse struct {
 }
 type TransactionItem struct {
 	ID           string  `json:"id"`
+	CategoryID   string  `json:"category_id"`
 	CategoryName string  `json:"category_name"`
 	CategoryType string  `json:"category_type"`
 	Amount       float64 `json:"amount"`
@@ -206,6 +207,7 @@ func TransactionToHttp(transcation budget.Transaction) TransactionItem {
 	return TransactionItem{
 		ID:           transcation.ID,
 		CategoryName: transcation.CategoryName,
+		CategoryID:   transcation.CategoryId,
 		CategoryType: transcation.CategoryType,
 		Amount:       transcation.Amount,
 		Currency:     transcation.Currency,
@@ -273,8 +275,16 @@ func IncomeCategoryCheckParams(params url.Values) (*budget.IncomeCategoryList, e
 
 	names := params.Get("names")
 	if names != "" {
-		filters.Names = strings.Split(names, ",")
-		hasAnyFilter = true
+		rawNames := strings.Split(names, ",")
+		trimmedNames := make([]string, 0)
+		for _, name := range rawNames {
+			trim := strings.TrimSpace(name)
+			trimmedNames = append(trimmedNames, trim)
+		}
+		if len(trimmedNames) > 0 {
+			filters.Names = trimmedNames
+			hasAnyFilter = true
+		}
 	} else {
 		return nil, appErrors.ErrorResponse{
 			Code:    appErrors.ErrInvalidInput,
@@ -344,8 +354,16 @@ func ExpenseCategoryCheckParams(params url.Values) (*budget.ExpenseCategoryList,
 
 	names := params.Get("names")
 	if names != "" {
-		filters.Names = strings.Split(names, ",")
-		hasAnyFilter = true
+		rawNames := strings.Split(names, ",")
+		trimmedNames := make([]string, 0)
+		for _, name := range rawNames {
+			trim := strings.TrimSpace(name)
+			trimmedNames = append(trimmedNames, trim)
+		}
+		if len(trimmedNames) > 0 {
+			filters.Names = trimmedNames
+			hasAnyFilter = true
+		}
 	} else {
 		return nil, appErrors.ErrorResponse{
 			Code:    appErrors.ErrInvalidInput,
@@ -430,8 +448,17 @@ func TransactionCheckParams(params url.Values) (*budget.TransactionList, error) 
 	categoryNames := params.Get("category_names")
 
 	if categoryNames != "" {
-		filters.CategoryNames = strings.Split(categoryNames, ",")
-		hasAnyFilter = true
+		rawNames := strings.Split(categoryNames, ",")
+		trimmedNames := make([]string, 0)
+		for _, name := range rawNames {
+			trim := strings.TrimSpace(name)
+			trimmedNames = append(trimmedNames, trim)
+		}
+
+		if len(trimmedNames) > 0 {
+			filters.CategoryNames = trimmedNames
+			hasAnyFilter = true
+		}
 	} else {
 		return nil, appErrors.ErrorResponse{
 			Code:    appErrors.ErrInvalidInput,

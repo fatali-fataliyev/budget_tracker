@@ -21,7 +21,7 @@ type IncomeCategoryRequest struct {
 }
 
 type TransactionRequest struct {
-	CategoryName string
+	CategoryId   string
 	CategoryType string
 	Amount       float64
 	Currency     string
@@ -74,6 +74,7 @@ type IncomeCategory struct {
 
 type Transaction struct {
 	ID           string
+	CategoryId   string
 	CategoryName string
 	CategoryType string
 	Amount       float64

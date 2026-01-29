@@ -1,6 +1,5 @@
 CREATE TABLE IF NOT EXISTS `transaction` (
     `id` CHAR(36) NOT NULL PRIMARY KEY,
-    `category_name` VARCHAR(255) NOT NULL,
     `category_id` CHAR(36),
     `category_type` ENUM('+', '-') NOT NULL,
     `amount` DECIMAL(20, 2) NOT NULL,
@@ -13,5 +12,5 @@ CREATE TABLE IF NOT EXISTS `transaction` (
 ALTER TABLE `transaction`
 ADD CONSTRAINT fk_created_by_transaction
 FOREIGN KEY (`created_by`) 
-REFERENCES `user` (`id`)z
+REFERENCES `user` (`id`)
 ON DELETE CASCADE;

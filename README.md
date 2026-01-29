@@ -1,4 +1,4 @@
-# Budget Tracker App 💰
+# Budget Tracker App 💰(v.2.1.0)
 
 A RESTful API built with Go 🦫 for managing personal budgets, expenses, and incomes, extract data from receipt.
 

@@ -99,7 +99,7 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 	}
 
 	newTransaction := budget.TransactionRequest{
-		CategoryName: newTransactionReq.CategoryName,
+		CategoryId:   newTransactionReq.CategoryId,
 		CategoryType: newTransactionReq.CategoryType,
 		Amount:       newTransactionReq.Amount,
 		Currency:     newTransactionReq.Currency,

@@ -255,10 +255,10 @@ func CapitalizeFullName(name string) string {
 }
 
 func (bt *BudgetTracker) SaveTransaction(ctx context.Context, userId string, transaction TransactionRequest) error {
-	if transaction.CategoryName == "" {
+	if transaction.CategoryId == "" {
 		return appErrors.ErrorResponse{
 			Code:    appErrors.ErrInvalidInput,
-			Message: "Category name cannot be empty!",
+			Message: "Category ID cannot be empty!",
 		}
 	}
 	if IsFloatZero(transaction.Amount) {
@@ -271,12 +271,6 @@ func (bt *BudgetTracker) SaveTransaction(ctx context.Context, userId string, tra
 		return appErrors.ErrorResponse{
 			Code:    appErrors.ErrInvalidInput,
 			Message: fmt.Sprintf("Maximum allowed amount per transaction is %d", MAX_TRANSACTION_AMOUNT_LIMIT),
-		}
-	}
-	if len(transaction.CategoryName) > MAX_TRANSACTION_CATEGORY_NAME_LENGTH {
-		return appErrors.ErrorResponse{
-			Code:    appErrors.ErrInvalidInput,
-			Message: fmt.Sprintf("Category name so long, maxiumum allowed cateogory name length %d", MAX_TRANSACTION_CATEGORY_NAME_LENGTH),
 		}
 	}
 	if len(transaction.Currency) > MAX_TRANSACTION_CURRENCY_LENGTH {
@@ -295,7 +289,7 @@ func (bt *BudgetTracker) SaveTransaction(ctx context.Context, userId string, tra
 	now := time.Now().UTC()
 	txn := Transaction{
 		ID:           uuid.New().String(),
-		CategoryName: strings.ToLower(transaction.CategoryName),
+		CategoryId:   transaction.CategoryId,
 		CategoryType: transaction.CategoryType,
 		Amount:       transaction.Amount,
 		Currency:     transaction.Currency,
@@ -630,6 +624,7 @@ func (bt *BudgetTracker) GetFilteredTransactions(ctx context.Context, userID str
 	for _, transaction := range ts {
 		t := Transaction{
 			ID:           transaction.ID,
+			CategoryId:   transaction.CategoryId,
 			CategoryName: transaction.CategoryName,
 			CategoryType: transaction.CategoryType,
 			Amount:       transaction.Amount,
@@ -640,6 +635,7 @@ func (bt *BudgetTracker) GetFilteredTransactions(ctx context.Context, userID str
 		}
 		transactions = append(transactions, t)
 	}
+
 	return transactions, nil
 }
 
