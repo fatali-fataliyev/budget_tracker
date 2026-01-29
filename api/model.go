@@ -293,7 +293,7 @@ func IncomeCategoryCheckParams(params url.Values) (*budget.IncomeCategoryList, e
 	}
 
 	targetAmountStr := params.Get("target_amount")
-	if targetAmountStr != "" {
+	if targetAmountStr != "" && targetAmountStr != "undefined" {
 		targetAmount, err := strconv.ParseFloat(targetAmountStr, 64)
 		if err != nil {
 			return nil, appErrors.ErrorResponse{
