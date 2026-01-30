@@ -258,8 +258,9 @@ func IncomeCategoryToHttp(category budget.IncomeCategoryResponse) IncomeCategory
 
 func ProcessedImageToHttp(processedImg budget.ProcessedImageResponse) ProcessedImageResponseItem {
 	return ProcessedImageResponseItem{
-		Amounts:       processedImg.Amounts,
-		CurrenciesISO: processedImg.CurrenciesISO,
+		Amounts:          processedImg.Amounts,
+		CurrenciesISO:    processedImg.CurrenciesISO,
+		CurrenciesSymbol: processedImg.CurrenciesSymbol,
 	}
 }
 

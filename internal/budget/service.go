@@ -331,9 +331,14 @@ func (bt *BudgetTracker) ProcessImage(ctx context.Context, imageRawText string) 
 
 	isoRegex := regexp.MustCompile(`\b[A-Z]{3}\b`)
 	isoMatches := isoRegex.FindAllString(imageRawText, -1)
-
+	symbolPattern := "[$£€¥₹₪₩₫฿₮₭₦₱₲₴₵₸₺₼₽﷼៛₾₿圓元৳₨৲૱௹꠸﷼﹩＄￠￦￡￥￯]"
+	symbolRegex := regexp.MustCompile(symbolPattern)
+	symbolMatches := symbolRegex.FindAllString(imageRawText, -1)
 	for _, iso := range isoMatches {
 		result.CurrenciesISO = append(result.CurrenciesISO, iso)
+	}
+	for _, symbol := range symbolMatches {
+		result.CurrenciesSymbol = append(result.CurrenciesSymbol, symbol)
 	}
 
 	return result, nil

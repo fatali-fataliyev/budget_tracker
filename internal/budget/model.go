@@ -158,6 +158,7 @@ type TransactionList struct {
 type ProcessedImageResponse struct {
 	Amounts       []float64
 	CurrenciesISO []string
+	CurrenciesSymbol []string
 }
 
 type UserDataResponse struct {
