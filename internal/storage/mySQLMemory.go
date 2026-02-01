@@ -1247,10 +1247,9 @@ func (mySql *MySQLStorage) GetFilteredTransactions(ctx context.Context, userID s
 			id, err := mySql.getCategoryIdByName(traceID, userID, name, filters.Type)
 			if err != nil {
 				logging.Logger.Errorf("[TraceID=%s] | failed to get category ID by Name  Storage.GetFilteredTransactions() function | Error : %v", traceID, err)
+				continue
 			}
-			if id != nil {
-				categoryIds = append(categoryIds, *id)
-			}
+			categoryIds = append(categoryIds, *id)
 		}
 
 		query += " AND category_id IN (?" + strings.Repeat(",?", len(categoryIds)-1) + ")"

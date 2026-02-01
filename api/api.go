@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/0xcafe-io/iz"
 	appErrors "github.com/fatali-fataliyev/budget_tracker/customErrors"
@@ -35,6 +34,32 @@ func NewApi(service *budget.BudgetTracker) *Api {
 	return &Api{
 		Service: service,
 	}
+}
+
+type contextKey string
+
+const userIdKey contextKey = "userId"
+
+func (api *Api) AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("Authorization")
+		if token == "" {
+			iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+				Code:    appErrors.ErrAuth,
+				Message: "Authorization header is required.",
+			})
+			return
+		}
+		ctx := r.Context()
+		userId, err := api.Service.CheckSession(ctx, token)
+		if err != nil {
+			RespondError(err)
+			return
+		}
+
+		newCtx := context.WithValue(ctx, userIdKey, userId)
+		next.ServeHTTP(w, r.WithContext(newCtx))
+	})
 }
 
 func (api *Api) SaveUserHandler(r *iz.Request) iz.Responder {
@@ -77,17 +102,12 @@ func (api *Api) SaveTransactionHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	var newTransactionReq CreateTransactionRequest
@@ -121,20 +141,15 @@ func (api *Api) ProcessImageHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	_, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
 	}
 
-	_, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
-	}
-
-	err = r.ParseMultipartForm(MAX_IMAGE_UPLOAD_SIZE)
+	err := r.ParseMultipartForm(MAX_IMAGE_UPLOAD_SIZE)
 	if err != nil {
 		return iz.Respond().Status(400).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrInvalidInput,
@@ -204,17 +219,12 @@ func (api *Api) SaveExpenseCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	var newExpCategoryReq ExpenseCategoryRequest
@@ -267,17 +277,12 @@ func (api *Api) SaveIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	var newIncCategoryReq IncomeCategoryRequest
@@ -317,19 +322,12 @@ func (api *Api) GetExpenseCategoryStatsHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	token = strings.TrimSpace(token)
-	token = strings.TrimPrefix(token, "Bearer ")
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	statsRaw, err := api.Service.GetExpenseCategoryStats(ctx, userId)
@@ -346,17 +344,12 @@ func (api *Api) GetIncomeCategoryStatsHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	statsRaw, err := api.Service.GetIncomeCategoryStats(ctx, userId)
@@ -373,17 +366,12 @@ func (api *Api) GetTransactionStatsHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	statsRaw, err := api.Service.GetTransactionStats(ctx, userId)
@@ -402,17 +390,12 @@ func (api *Api) GetFilteredIncomeCategoriesHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	params := r.URL.Query()
@@ -442,17 +425,12 @@ func (api *Api) GetFilteredExpenseCategoriesHandler(r *iz.Request) iz.Responder 
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	params := r.URL.Query()
@@ -481,17 +459,12 @@ func (api *Api) GetFilteredTransactionsHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	params := r.URL.Query()
@@ -521,16 +494,12 @@ func (api *Api) GetTransactionByIdHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	txnId := r.PathValue("id")
@@ -551,17 +520,12 @@ func (api *Api) UpdateExpenseCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	var updateExpCategoryReq UpdateExpenseCategoryRequest
@@ -604,16 +568,12 @@ func (api *Api) DeleteExpenseCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	var categoryId string = r.PathValue("id")
@@ -639,17 +599,12 @@ func (api *Api) UpdateIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	var updateIncCategoryReq UpdateIncomeCategoryRequest
@@ -691,16 +646,12 @@ func (api *Api) DeleteIncomeCategoryHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	var categoryId string = r.PathValue("id")
@@ -784,14 +735,29 @@ func (api *Api) DownloadUserData(w http.ResponseWriter, r *http.Request) {
 
 	token := r.Header.Get("Authorization")
 	if token == "" {
-		http.Error(w, "Authorization header is required.", http.StatusUnauthorized)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		errJson := appErrors.ErrorResponse{
+			Code:    appErrors.ErrAuth,
+			Message: "Authorization header is required.",
+		}
+		if err := json.NewEncoder(w).Encode(errJson); err != nil {
+			logging.Logger.Errorf("[TraceID=%s] Failed to encode error json: %v", traceID, err)
+		}
 		return
 	}
 
 	userId, err := api.Service.CheckSession(ctx, token)
 	if err != nil {
-		logging.Logger.Errorf("[TraceID=%s] | Session check failed: %v", traceID, err)
-		http.Error(w, "UNAUTHORIZED", http.StatusUnauthorized)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		errJson := appErrors.ErrorResponse{
+			Code:    appErrors.ErrAuth,
+			Message: "Your token is not valid, please log in again",
+		}
+		if err := json.NewEncoder(w).Encode(errJson); err != nil {
+			logging.Logger.Errorf("[TraceID=%s] Failed to encode error json: %v", traceID, err)
+		}
 		return
 	}
 
@@ -843,7 +809,7 @@ func (api *Api) DownloadUserData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="user_data.zip"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="budget_tracker_my_data.zip"`)
 	w.WriteHeader(http.StatusOK)
 
 	_, err = w.Write(buf.Bytes())
@@ -883,17 +849,12 @@ func (api *Api) DeleteUserHandler(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	var deleteReqRaw DeleteUserRequest
@@ -923,17 +884,12 @@ func (api *Api) GetAccountInfo(r *iz.Request) iz.Responder {
 	traceID := uuid.NewString()
 	ctx := context.WithValue(r.Context(), contextutil.TraceIDKey, traceID)
 
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		return iz.Respond().Status(401).JSON(appErrors.ErrorResponse{
+	userId, ok := r.Context().Value(userIdKey).(string)
+	if !ok {
+		return iz.Respond().Status(500).JSON(appErrors.ErrorResponse{
 			Code:    appErrors.ErrAuth,
-			Message: "Authorization header is required.",
+			Message: "UserID not found",
 		})
-	}
-
-	userId, err := api.Service.CheckSession(ctx, token)
-	if err != nil {
-		return RespondError(err)
 	}
 
 	accInfoRaw, err := api.Service.GetAccountInfo(ctx, userId)
